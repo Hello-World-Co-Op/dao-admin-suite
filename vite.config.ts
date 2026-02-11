@@ -35,9 +35,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@hello-world-co-op/ui'],
-          auth: ['@hello-world-co-op/auth'],
-          api: ['@hello-world-co-op/api'],
         },
       },
     },
