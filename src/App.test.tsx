@@ -5,12 +5,14 @@
  * lazy loading, and error boundary integration.
  *
  * @see FAS-7.1 - DAO Admin Suite extraction
+ * @see BL-007.4 - Integrate AdminGuard in dao-admin-suite
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import type { ReactNode } from 'react';
 
 // Mock all lazy-loaded pages
 vi.mock('@/pages/AdminDashboard', () => ({
@@ -61,6 +63,12 @@ vi.mock('@/pages/LoginRedirect', () => ({
   },
 }));
 
+vi.mock('@/pages/Unauthorized', () => ({
+  default: function MockUnauthorized() {
+    return <div data-testid="unauthorized">Unauthorized</div>;
+  },
+}));
+
 // Mock analytics
 vi.mock('@/utils/analytics', () => ({
   trackEvent: vi.fn(),
@@ -82,6 +90,26 @@ vi.mock('@/hooks/useAdminAuth', () => ({
     isAuthenticated: true,
     isLoading: false,
     userId: 'test-admin',
+    logout: vi.fn(),
+  }),
+}));
+
+// Mock @hello-world-co-op/auth - RoleGuard passes children through (admin user scenario)
+// AuthProvider is a simple passthrough wrapper in tests
+vi.mock('@hello-world-co-op/auth', () => ({
+  RoleGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useAuth: () => ({
+    isAuthenticated: true,
+    isLoading: false,
+    user: { userId: 'test-admin', email: 'test@test.com', providers: [], roles: ['admin'] },
+    roles: ['admin'],
+    hasRole: (role: string) => role === 'admin',
+    isAdmin: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn(),
+    error: null,
   }),
 }));
 
@@ -97,6 +125,7 @@ const TreasuryManagement = lazy(() => import('@/pages/TreasuryManagement'));
 const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
 const LoginRedirect = lazy(() => import('@/pages/LoginRedirect'));
+const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
 /**
  * Helper to render App routes with MemoryRouter at a specific path
@@ -107,6 +136,7 @@ function renderAtPath(path: string) {
       <Suspense fallback={<div>Loading...</div>}>
         <Routes>
           <Route path="/login" element={<LoginRedirect />} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
           <Route path="/kyc" element={<ProtectedRoute><KYCManagement /></ProtectedRoute>} />
           <Route path="/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
@@ -186,6 +216,14 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('content-moderation')).toBeInTheDocument();
+    });
+  });
+
+  it('should render unauthorized page on /unauthorized route', async () => {
+    renderAtPath('/unauthorized');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('unauthorized')).toBeInTheDocument();
     });
   });
 });

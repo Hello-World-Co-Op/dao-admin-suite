@@ -1,20 +1,19 @@
 /**
  * DAO Admin Suite - Root Application Component
  *
- * Wraps the router with ErrorBoundary for consistent error handling.
+ * Wraps the router with ErrorBoundary and AuthProvider for consistent
+ * error handling and role-based access control.
  * Uses route-based code splitting for optimal performance.
- * ALL routes require authentication via ProtectedRoute wrapper.
- * No public pages in the admin suite (except LoginRedirect).
+ * ALL admin routes require authentication (ProtectedRoute) and admin role (RoleGuard).
+ * The /unauthorized route is accessible to authenticated non-admin users.
  *
- * NOTE: AdminGuard for RBAC enforcement comes in FAS-7.2
- * (dependency: bl-007). Currently only ProtectedRoute (auth check)
- * is used.
- *
+ * @see BL-007.4 - Integrate AdminGuard in dao-admin-suite
  * @see FAS-7.1 - Create and Deploy dao-admin-suite
  */
 
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from '@hello-world-co-op/auth';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
@@ -27,6 +26,7 @@ const TreasuryManagement = lazy(() => import('@/pages/TreasuryManagement'));
 const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
 const LoginRedirect = lazy(() => import('@/pages/LoginRedirect'));
+const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
@@ -38,24 +38,31 @@ function PageLoader() {
 }
 
 export default function App() {
+  const oracleBridgeUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL || undefined;
+
   return (
     <BrowserRouter>
       <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* Login redirect - no authentication required (handles redirect to FounderyOS) */}
-            <Route path="/login" element={<LoginRedirect />} />
+        <AuthProvider config={{ apiBaseUrl: oracleBridgeUrl }}>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Login redirect - no authentication required (handles redirect to FounderyOS) */}
+              <Route path="/login" element={<LoginRedirect />} />
 
-            {/* All admin routes require authentication via ProtectedRoute */}
-            <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/kyc" element={<ProtectedRoute><KYCManagement /></ProtectedRoute>} />
-            <Route path="/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
-            <Route path="/governance" element={<ProtectedRoute><GovernanceOversight /></ProtectedRoute>} />
-            <Route path="/treasury" element={<ProtectedRoute><TreasuryManagement /></ProtectedRoute>} />
-            <Route path="/monitoring" element={<ProtectedRoute><SystemMonitoring /></ProtectedRoute>} />
-            <Route path="/moderation" element={<ProtectedRoute><ContentModeration /></ProtectedRoute>} />
-          </Routes>
-        </Suspense>
+              {/* Unauthorized page - accessible to authenticated non-admin users (AC2) */}
+              <Route path="/unauthorized" element={<Unauthorized />} />
+
+              {/* All admin routes require authentication + admin role via ProtectedRoute */}
+              <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/kyc" element={<ProtectedRoute><KYCManagement /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
+              <Route path="/governance" element={<ProtectedRoute><GovernanceOversight /></ProtectedRoute>} />
+              <Route path="/treasury" element={<ProtectedRoute><TreasuryManagement /></ProtectedRoute>} />
+              <Route path="/monitoring" element={<ProtectedRoute><SystemMonitoring /></ProtectedRoute>} />
+              <Route path="/moderation" element={<ProtectedRoute><ContentModeration /></ProtectedRoute>} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
       </ErrorBoundary>
     </BrowserRouter>
   );

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
  * Main landing page for DAO administrators showing summary stats
  * and navigation to admin functions.
  *
- * NOTE: AdminGuard for RBAC enforcement comes in FAS-7.2.
+ * Admin role enforcement is provided by RoleGuard in ProtectedRoute (BL-007.4).
  */
 export default function AdminDashboard() {
   const adminSections = [

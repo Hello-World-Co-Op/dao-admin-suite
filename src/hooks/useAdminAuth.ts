@@ -3,15 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 /**
  * Admin Authentication Hook
  *
- * Provides authentication state for the admin suite.
+ * Provides authentication state and logout for the admin suite.
  *
  * Auth check order (FAS-8.1 SSO support):
  * 1. Cookie-based session via oracle-bridge (shared across *.helloworlddao.com)
  * 2. sessionStorage tokens (legacy, per-suite)
  *
- * NOTE: RBAC enforcement (AdminGuard checking admin role) comes in FAS-7.2
- * (dependency: bl-007). This hook currently only checks if the user is
- * authenticated, not if they have admin permissions.
+ * RBAC enforcement is handled by RoleGuard from @hello-world-co-op/auth,
+ * composed inside ProtectedRoute (BL-007.4).
  *
  * Bridge pattern: Suite-specific auth hook. When @hello-world-co-op/auth
  * exports useAuth() with role checking, this can delegate to that.
@@ -21,6 +20,7 @@ interface AdminAuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   userId: string | null;
+  logout: () => Promise<void>;
 }
 
 /**
@@ -40,7 +40,7 @@ async function checkCookieSession(): Promise<{ authenticated: boolean; userId?: 
 }
 
 export function useAdminAuth(): AdminAuthState {
-  const [state, setState] = useState<AdminAuthState>({
+  const [state, setState] = useState<Omit<AdminAuthState, 'logout'>>({
     isAuthenticated: false,
     isLoading: true,
     userId: null,
@@ -103,9 +103,28 @@ export function useAdminAuth(): AdminAuthState {
     }
   }, []);
 
+  const logout = useCallback(async () => {
+    const baseUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
+    try {
+      await fetch(`${baseUrl}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Logout request may fail if server unreachable; still clear local state
+    }
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('user_id');
+    setState({
+      isAuthenticated: false,
+      isLoading: false,
+      userId: null,
+    });
+  }, []);
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
-  return state;
+  return { ...state, logout };
 }

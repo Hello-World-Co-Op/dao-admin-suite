@@ -1,7 +1,9 @@
 import { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { RoleGuard } from '@hello-world-co-op/auth';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import Unauthorized from '@/pages/Unauthorized';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -10,18 +12,22 @@ interface ProtectedRouteProps {
 /**
  * ProtectedRoute Component
  *
- * Wraps protected pages and ensures user is authenticated before rendering.
- * Redirects to /login (LoginRedirect) if user is not authenticated.
+ * Wraps protected pages ensuring the user is:
+ * 1. Authenticated (via useAdminAuth hook)
+ * 2. Has the 'admin' role (via RoleGuard from @hello-world-co-op/auth)
  *
- * NOTE: This uses a simplified auth check. RBAC enforcement via AdminGuard
- * is a SEPARATE story (FAS-7.2) that depends on bl-007 (RBAC Implementation).
+ * Unauthenticated users are redirected to /login.
+ * Authenticated non-admin users see the Unauthorized page.
+ * Loading state is shown during both auth and role verification (no content flash).
  *
- * Bridge pattern: Suite-specific ProtectedRoute adapted from dao-suite.
- * Uses useAdminAuth hook for auth state management.
+ * @see BL-007.4 AC1 - RoleGuard wraps all admin routes
+ * @see BL-007.4 AC3 - Unauthenticated users redirected to login
+ * @see BL-007.4 AC4 - Admin role verified on each protected route load
+ * @see BL-007.4 AC6 - Loading state shown during role verification
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
-  const { isAuthenticated, isLoading } = useAdminAuth();
+  const { isAuthenticated, isLoading, userId } = useAdminAuth();
 
   // Show loading spinner while checking authentication
   if (isLoading) {
@@ -35,11 +41,31 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated (AC3)
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Render protected content
-  return <>{children}</>;
+  // RoleGuard checks admin role via AuthProvider context (AC1, AC4, AC5, AC6)
+  // DEV-only console logging is handled in UnauthorizedWithLogging fallback (AC7)
+  return (
+    <RoleGuard
+      requiredRole="admin"
+      fallback={<UnauthorizedWithLogging userId={userId} />}
+    >
+      <>{children}</>
+    </RoleGuard>
+  );
+}
+
+/**
+ * Wrapper that logs unauthorized attempts in DEV mode before rendering
+ * the Unauthorized page.
+ */
+function UnauthorizedWithLogging({ userId }: { userId: string | null }) {
+  // AC7: DEV-only console logging for unauthorized attempts
+  if (import.meta.env.DEV) {
+    console.warn('[AdminGuard] Unauthorized access attempt:', { userId });
+  }
+  return <Unauthorized />;
 }
