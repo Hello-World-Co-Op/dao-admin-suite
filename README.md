@@ -82,7 +82,24 @@ Authentication is handled by FounderyOS. When an unauthenticated user visits any
 2. `LoginRedirect` redirects to FounderyOS login with a `returnUrl` back to the admin suite
 3. After authentication, FounderyOS redirects the user back
 
-RBAC enforcement (AdminGuard) is planned for FAS-7.2.
+### RBAC Enforcement
+
+This suite enforces role-based access control (RBAC) using the platform-wide role system:
+
+- **Required Role:** Admin (assigned in `auth-service` canister)
+- **Enforcement:** `RoleGuard role="admin"` wraps all routes except `/login` and `/unauthorized`
+- **Unauthorized Access:** Users without Admin role are redirected to `/unauthorized` page
+- **Session-Based:** Roles are cached in session tokens at login time (changes take effect on next login)
+
+**Integration:**
+- Uses `@hello-world-co-op/auth@^0.2.0` for `<RoleGuard>` and `useRoles()` hook
+- All protected routes wrapped in `<RoleGuard role="admin">`
+- Admin-specific `validateReturnUrl()` prevents open redirect attacks
+
+**For developers:**
+- See [RBAC Integration Guide](https://github.com/Hello-World-Co-Op/docs/blob/main/developer/rbac-integration.md) for full RBAC documentation
+- Admin role assignment: `dfx canister call auth-service assign_role '("user-id", variant { Admin })'`
+- Role debugging: See [FAS Troubleshooting - RBAC section](https://github.com/Hello-World-Co-Op/docs/blob/main/developer/fas-troubleshooting.md#rbac-issues)
 
 ## Project Structure
 
