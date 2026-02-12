@@ -4,11 +4,12 @@
  * Tests for the login redirect page that sends users to FounderyOS.
  *
  * @see FAS-7.1 - DAO Admin Suite extraction
+ * @see FAS-8.1 - Cross-suite SSO cookie check
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import LoginRedirect from './LoginRedirect';
 
@@ -16,6 +17,14 @@ import LoginRedirect from './LoginRedirect';
 vi.mock('../utils/validateReturnUrl', () => ({
   validateReturnUrl: vi.fn((url) => url || '/'),
 }));
+
+// Mock fetch for cookie session check — default to unauthenticated
+const mockFetch = vi.fn(() =>
+  Promise.resolve({
+    json: () => Promise.resolve({ authenticated: false }),
+  } as Response)
+);
+vi.stubGlobal('fetch', mockFetch);
 
 describe('LoginRedirect', () => {
   let locationAssignMock: ReturnType<typeof vi.fn>;
@@ -42,7 +51,7 @@ describe('LoginRedirect', () => {
     vi.clearAllMocks();
   });
 
-  it('should redirect to FounderyOS login with returnUrl', () => {
+  it('should redirect to FounderyOS login with returnUrl', async () => {
     const fromLocation = { pathname: '/kyc' };
 
     render(
@@ -53,16 +62,17 @@ describe('LoginRedirect', () => {
       </MemoryRouter>
     );
 
-    // Should redirect to FounderyOS with admin-suite returnUrl
-    expect(locationAssignMock).toHaveBeenCalledWith(
-      expect.stringContaining('http://127.0.0.1:5174/login')
-    );
+    await waitFor(() => {
+      expect(locationAssignMock).toHaveBeenCalledWith(
+        expect.stringContaining('http://127.0.0.1:5174/login')
+      );
+    });
     expect(locationAssignMock).toHaveBeenCalledWith(
       expect.stringContaining('returnUrl=http%3A%2F%2Flocalhost%3A5176%2Fkyc')
     );
   });
 
-  it('should redirect to FounderyOS login with default returnUrl when no state', () => {
+  it('should redirect to FounderyOS login with default returnUrl when no state', async () => {
     render(
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
@@ -71,16 +81,17 @@ describe('LoginRedirect', () => {
       </MemoryRouter>
     );
 
-    // Should redirect with default root returnUrl
-    expect(locationAssignMock).toHaveBeenCalledWith(
-      expect.stringContaining('http://127.0.0.1:5174/login')
-    );
+    await waitFor(() => {
+      expect(locationAssignMock).toHaveBeenCalledWith(
+        expect.stringContaining('http://127.0.0.1:5174/login')
+      );
+    });
     expect(locationAssignMock).toHaveBeenCalledWith(
       expect.stringContaining('returnUrl=http%3A%2F%2Flocalhost%3A5176%2F')
     );
   });
 
-  it('should include message in redirect URL', () => {
+  it('should include message in redirect URL', async () => {
     render(
       <MemoryRouter initialEntries={['/login?message=Session+expired']}>
         <Routes>
@@ -96,13 +107,14 @@ describe('LoginRedirect', () => {
       </MemoryRouter>
     );
 
-    // Should include message parameter (URL encoded)
-    expect(locationAssignMock).toHaveBeenCalledWith(
-      expect.stringContaining('message=Session')
-    );
+    await waitFor(() => {
+      expect(locationAssignMock).toHaveBeenCalledWith(
+        expect.stringContaining('message=Session')
+      );
+    });
   });
 
-  it('should use default FounderyOS URL', () => {
+  it('should use default FounderyOS URL', async () => {
     const fromLocation = { pathname: '/members' };
 
     render(
@@ -113,13 +125,14 @@ describe('LoginRedirect', () => {
       </MemoryRouter>
     );
 
-    // Should redirect to default FounderyOS URL
-    expect(locationAssignMock).toHaveBeenCalledWith(
-      expect.stringContaining('http://127.0.0.1:5174/login')
-    );
+    await waitFor(() => {
+      expect(locationAssignMock).toHaveBeenCalledWith(
+        expect.stringContaining('http://127.0.0.1:5174/login')
+      );
+    });
   });
 
-  it('should redirect with validated returnUrl from location state', () => {
+  it('should redirect with validated returnUrl from location state', async () => {
     const fromLocation = { pathname: '/governance' };
 
     render(
@@ -130,10 +143,11 @@ describe('LoginRedirect', () => {
       </MemoryRouter>
     );
 
-    // Should call validateReturnUrl and use the result
-    expect(locationAssignMock).toHaveBeenCalledWith(
-      expect.stringContaining('returnUrl=http%3A%2F%2Flocalhost%3A5176%2Fgovernance')
-    );
+    await waitFor(() => {
+      expect(locationAssignMock).toHaveBeenCalledWith(
+        expect.stringContaining('returnUrl=http%3A%2F%2Flocalhost%3A5176%2Fgovernance')
+      );
+    });
   });
 
   it('should display redirect message text', () => {

@@ -4,7 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
  * Admin Authentication Hook
  *
  * Provides authentication state for the admin suite.
- * Uses cookie/token-based auth from cross-subdomain SSO.
+ *
+ * Auth check order (FAS-8.1 SSO support):
+ * 1. Cookie-based session via oracle-bridge (shared across *.helloworlddao.com)
+ * 2. sessionStorage tokens (legacy, per-suite)
  *
  * NOTE: RBAC enforcement (AdminGuard checking admin role) comes in FAS-7.2
  * (dependency: bl-007). This hook currently only checks if the user is
@@ -20,6 +23,22 @@ interface AdminAuthState {
   userId: string | null;
 }
 
+/**
+ * Check cookie-based session via oracle-bridge (FAS-8.1 SSO)
+ */
+async function checkCookieSession(): Promise<{ authenticated: boolean; userId?: string }> {
+  const baseUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
+  const response = await fetch(`${baseUrl}/api/auth/session`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  const data = await response.json();
+  return {
+    authenticated: data.authenticated === true,
+    userId: data.user_id,
+  };
+}
+
 export function useAdminAuth(): AdminAuthState {
   const [state, setState] = useState<AdminAuthState>({
     isAuthenticated: false,
@@ -27,7 +46,7 @@ export function useAdminAuth(): AdminAuthState {
     userId: null,
   });
 
-  const checkAuth = useCallback(() => {
+  const checkAuth = useCallback(async () => {
     try {
       // Check for auth bypass in development/E2E
       if (
@@ -42,13 +61,26 @@ export function useAdminAuth(): AdminAuthState {
         return;
       }
 
-      // Check for stored auth tokens
+      // FAS-8.1: Check cookie-based session first (cross-suite SSO)
+      try {
+        const session = await checkCookieSession();
+        if (session.authenticated) {
+          setState({
+            isAuthenticated: true,
+            isLoading: false,
+            userId: session.userId ?? null,
+          });
+          return;
+        }
+      } catch {
+        // Cookie session check failed — fall through to sessionStorage
+      }
+
+      // Legacy: Check for stored auth tokens
       const accessToken = sessionStorage.getItem('access_token');
       const userId = sessionStorage.getItem('user_id');
 
       if (accessToken && userId) {
-        // TODO: Validate token expiry and refresh if needed
-        // This will be enhanced when integrating with @hello-world-co-op/auth
         setState({
           isAuthenticated: true,
           isLoading: false,
