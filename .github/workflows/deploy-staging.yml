@@ -35,7 +35,7 @@ jobs:
           else
             echo "::warning::Lock file contains link/file references, using npm install"
             rm -f package-lock.json
-            npm install --legacy-peer-deps
+            npm install
           fi
 
       - name: Run TypeScript check
@@ -81,7 +81,7 @@ jobs:
           else
             echo "::warning::Lock file contains link/file references, using npm install"
             rm -f package-lock.json
-            npm install --legacy-peer-deps
+            npm install
           fi
 
       - name: Create .well-known directory
