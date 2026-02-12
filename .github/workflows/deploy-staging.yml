@@ -27,9 +27,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f package-lock.json ] && ! grep -q '"link": true' package-lock.json && ! grep -q '"file:' package-lock.json; then
+            npm ci
+          else
+            echo "::warning::Lock file contains link/file references, using npm install"
+            rm -f package-lock.json
+            npm install
+          fi
 
       - name: Run TypeScript check
         run: npx tsc --noEmit
@@ -66,9 +73,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f package-lock.json ] && ! grep -q '"link": true' package-lock.json && ! grep -q '"file:' package-lock.json; then
+            npm ci
+          else
+            echo "::warning::Lock file contains link/file references, using npm install"
+            rm -f package-lock.json
+            npm install
+          fi
 
       - name: Create .well-known directory
         run: |
