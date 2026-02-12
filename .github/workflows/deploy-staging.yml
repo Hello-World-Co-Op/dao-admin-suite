@@ -134,9 +134,8 @@ jobs:
           ls -la dist/assets/ | grep index
 
           dfx deploy dao_admin_suite_assets --network ic --yes || {
-            echo "Normal deploy failed, attempting reinstall..."
-            dfx canister uninstall-code dao_admin_suite_assets --network ic || true
-            dfx deploy dao_admin_suite_assets --network ic --yes
+            echo "Normal upgrade failed, attempting reinstall (wipes stable storage)..."
+            dfx deploy dao_admin_suite_assets --network ic --yes --mode reinstall
           }
 
           # Restore original files
