@@ -20,6 +20,30 @@ Suite-specific components use the **bridge pattern**: local implementations that
 - npm 10+
 - Sibling repos cloned: `api`, `auth`, `ui`
 
+### Environment Variables
+
+Copy `.env.example` to `.env.local` and configure:
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_IC_HOST` | IC replica URL (default: `http://127.0.0.1:4943`) |
+| `VITE_AUTH_SERVICE_CANISTER_ID` | auth-service canister ID |
+| `VITE_DEV_AUTH_BYPASS` | Set to `true` to bypass auth for QA testing (dev only) |
+
+#### Cross-Suite Navigation URLs
+
+These environment variables configure the cross-suite navigation menu (SuiteSwitcher component):
+
+| Variable | Description | Example (Staging) |
+|----------|-------------|-------------------|
+| `VITE_DAO_FRONTEND_URL` | DAO portal URL | `https://staging-portal.helloworlddao.com` |
+| `VITE_FOUNDERY_OS_URL` | FounderyOS productivity suite URL | `https://staging-foundery.helloworlddao.com` |
+| `VITE_GOVERNANCE_SUITE_URL` | Governance suite URL | `https://staging-governance.helloworlddao.com` |
+| `VITE_OTTER_CAMP_URL` | Otter Camp game URL | `https://staging-ottercamp.helloworlddao.com` |
+| `VITE_ADMIN_SUITE_URL` | Admin dashboard URL (this suite) | `https://staging-admin.helloworlddao.com` |
+
+See `.env.example` for detailed documentation.
+
 ### Development
 
 ```bash
