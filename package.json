@@ -20,6 +20,7 @@
   "dependencies": {
     "@dfinity/principal": "^3.4.3",
     "@hello-world-co-op/auth": "^0.2.0",
+    "@hello-world-co-op/ui": "^0.2.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.553.0",
     "react": "^19.1.0",

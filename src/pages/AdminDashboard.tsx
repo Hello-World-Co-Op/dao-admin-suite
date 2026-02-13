@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { SuiteSwitcher } from '@hello-world-co-op/ui';
 
 /**
  * Admin Dashboard Page
@@ -65,10 +66,23 @@ export default function AdminDashboard() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Hello World DAO administration and oversight tools
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-gray-600 mt-2">
+                Hello World DAO administration and oversight tools
+              </p>
+            </div>
+            <SuiteSwitcher
+              currentSuite="admin"
+              suiteUrls={{
+                portal: import.meta.env.VITE_DAO_FRONTEND_URL,
+                founderyOs: import.meta.env.VITE_FOUNDERY_OS_URL,
+                governance: import.meta.env.VITE_GOVERNANCE_SUITE_URL,
+                otterCamp: import.meta.env.VITE_OTTER_CAMP_URL,
+              }}
+            />
+          </div>
         </div>
       </header>
 
