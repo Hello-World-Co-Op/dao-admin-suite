@@ -32,6 +32,10 @@ const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 // This is a temporary experimental route - not for production use
 const EditorSpike = lazy(() => import('@/pages/blog/EditorSpike'));
 
+// Production blog editor (BL-008.3.2) - code-split for LCP < 2.5s (NFR2)
+// Editor chunk must remain under 200KB gzip (NFR7)
+const BlogEditorPage = lazy(() => import('@/pages/blog/BlogEditorPage'));
+
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
   return (
@@ -58,6 +62,10 @@ export default function App() {
 
               {/* Spike: Tiptap editor validation (BL-008.3.1) - temporary, no auth required */}
               <Route path="/blog/spike-editor" element={<EditorSpike />} />
+
+              {/* Blog editor routes - require authentication + admin/author role (BL-008.3.2) */}
+              <Route path="/blog/editor/new" element={<ProtectedRoute><BlogEditorPage /></ProtectedRoute>} />
+              <Route path="/blog/editor/:id" element={<ProtectedRoute><BlogEditorPage /></ProtectedRoute>} />
 
               {/* All admin routes require authentication + admin role via ProtectedRoute */}
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
