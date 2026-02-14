@@ -28,6 +28,10 @@ const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
 const LoginRedirect = lazy(() => import('@/pages/LoginRedirect'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
+// Spike: Tiptap editor feasibility validation (BL-008.3.1)
+// This is a temporary experimental route - not for production use
+const EditorSpike = lazy(() => import('@/pages/blog/EditorSpike'));
+
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
   return (
@@ -51,6 +55,9 @@ export default function App() {
 
               {/* Unauthorized page - accessible to authenticated non-admin users (AC2) */}
               <Route path="/unauthorized" element={<Unauthorized />} />
+
+              {/* Spike: Tiptap editor validation (BL-008.3.1) - temporary, no auth required */}
+              <Route path="/blog/spike-editor" element={<EditorSpike />} />
 
               {/* All admin routes require authentication + admin role via ProtectedRoute */}
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
