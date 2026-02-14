@@ -308,8 +308,10 @@ export default function BlogEditorPage() {
 
         setCurrentPostId(data.id);
         showToast('Draft saved successfully');
-        // Update URL to edit mode (Task 7.6)
-        navigate(`/blog/editor/${slug || data.id}`, { replace: true });
+        // Update URL to edit mode using post ID (Task 7.6)
+        // The canister auto-generates slugs, but create_post only returns the
+        // numeric ID. Use ID for navigation; loadPost handles both IDs and slugs.
+        navigate(`/blog/editor/${data.id}`, { replace: true });
       }
     } catch (error) {
       console.error('[BlogEditor] Save error:', error);
@@ -353,8 +355,10 @@ export default function BlogEditorPage() {
 
       setUpdatedAt(data.updated_at);
       setSlugError(null);
+      showToast('Metadata saved');
     } catch (error) {
       console.error('[BlogEditor] Metadata update error:', error);
+      showToast('Failed to save metadata. Please try again.');
     }
   }, [currentPostId, updatedAt, oracleBridgeUrl, title, slug, excerpt, categories, tags, showToast]);
 

@@ -14,7 +14,7 @@
  * @see AC2 - MetadataPanel components
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { SlugField } from './SlugField';
 import { ExcerptEditor } from './ExcerptEditor';
 import { CategorySelector } from './CategorySelector';
@@ -61,6 +61,14 @@ export function MetadataPanel({
 }: MetadataPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
 
+  // Only fire onMetadataBlur when focus actually leaves the panel entirely,
+  // not when focus moves between child inputs within the panel.
+  const handlePanelBlur = useCallback((e: React.FocusEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      onMetadataBlur?.();
+    }
+  }, [onMetadataBlur]);
+
   return (
     <div
       className="border border-gray-200 rounded-lg bg-white"
@@ -106,7 +114,7 @@ export function MetadataPanel({
           aria-labelledby="metadata-header"
           className="px-4 pb-4 space-y-4 border-t border-gray-200"
           data-testid="metadata-content"
-          onBlur={onMetadataBlur}
+          onBlur={handlePanelBlur}
         >
           <div className="pt-4">
             <SlugField
