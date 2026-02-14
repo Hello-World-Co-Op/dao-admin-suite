@@ -13,6 +13,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PostStatusBadge, type PostStatus } from './PostStatusBadge';
+import { formatDate } from '@/utils/formatDate';
 
 export interface BlogPost {
   id: number;
@@ -36,17 +37,6 @@ interface PostTableProps {
   onSchedule: (postId: number) => void;
   onArchive: (postId: number) => void;
   isAdmin: boolean;
-}
-
-function formatDate(timestamp: number | null): string {
-  if (!timestamp) return '-';
-  // IC nanosecond timestamps need to be divided by 1_000_000 to get milliseconds
-  const ms = timestamp > 1e15 ? timestamp / 1_000_000 : timestamp;
-  return new Date(ms).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export function PostTable({ posts, onPublish, onSchedule, onArchive, isAdmin }: PostTableProps) {

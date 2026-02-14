@@ -77,6 +77,9 @@ function AdminDashboard() {
   // Archive confirmation state
   const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
 
+  // Action loading state (prevents double-clicks)
+  const [actionLoading, setActionLoading] = useState(false);
+
   // Sidebar collapsed state for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -126,8 +129,24 @@ function AdminDashboard() {
     setSearchParams(params, { replace: true });
   }, [activeTab, currentPage, setSearchParams]);
 
+  // Close archive dialog with Escape key
+  useEffect(() => {
+    if (archiveConfirmId === null) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setArchiveConfirmId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [archiveConfirmId]);
+
   // Publish action
   const handlePublish = useCallback(async (postId: number) => {
+    if (actionLoading) return;
+    setActionLoading(true);
     try {
       const response = await fetch(`${oracleBridgeUrl}/api/blog/publish`, {
         method: 'POST',
@@ -149,8 +168,10 @@ function AdminDashboard() {
       );
     } catch {
       showToast('Failed to publish post', 'error');
+    } finally {
+      setActionLoading(false);
     }
-  }, [oracleBridgeUrl, showToast]);
+  }, [oracleBridgeUrl, showToast, actionLoading]);
 
   // Schedule action
   const handleScheduleClick = useCallback((postId: number) => {
@@ -159,12 +180,18 @@ function AdminDashboard() {
   }, []);
 
   const handleScheduleConfirm = useCallback(async (dateTimeStr: string) => {
-    if (!schedulePostId) return;
-
-    // Convert to IC nanoseconds (Date.parse returns milliseconds)
-    const scheduledAtNanos = BigInt(Date.parse(dateTimeStr)) * 1_000_000n;
+    if (!schedulePostId || actionLoading) return;
+    setActionLoading(true);
 
     try {
+      // Convert to IC nanoseconds (Date.parse returns milliseconds)
+      const parsedMs = Date.parse(dateTimeStr);
+      if (isNaN(parsedMs)) {
+        showToast('Invalid date format', 'error');
+        return;
+      }
+      const scheduledAtNanos = BigInt(parsedMs) * 1_000_000n;
+
       const response = await fetch(`${oracleBridgeUrl}/api/blog/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,13 +212,15 @@ function AdminDashboard() {
       setPosts((prev) =>
         prev.map((p) => (p.id === schedulePostId ? { ...p, status: 'Scheduled' as const } : p)),
       );
-    } catch {
+    } catch (error) {
+      console.error('[BlogDashboard] Schedule error:', error);
       showToast('Failed to schedule post', 'error');
     } finally {
+      setActionLoading(false);
       setScheduleModalVisible(false);
       setSchedulePostId(null);
     }
-  }, [oracleBridgeUrl, schedulePostId, showToast]);
+  }, [oracleBridgeUrl, schedulePostId, showToast, actionLoading]);
 
   // Archive action
   const handleArchiveClick = useCallback((postId: number) => {
@@ -199,7 +228,8 @@ function AdminDashboard() {
   }, []);
 
   const handleArchiveConfirm = useCallback(async () => {
-    if (!archiveConfirmId) return;
+    if (!archiveConfirmId || actionLoading) return;
+    setActionLoading(true);
 
     try {
       const response = await fetch(`${oracleBridgeUrl}/api/blog/archive`, {
@@ -222,9 +252,10 @@ function AdminDashboard() {
     } catch {
       showToast('Failed to archive post', 'error');
     } finally {
+      setActionLoading(false);
       setArchiveConfirmId(null);
     }
-  }, [oracleBridgeUrl, archiveConfirmId, showToast]);
+  }, [oracleBridgeUrl, archiveConfirmId, showToast, actionLoading]);
 
   // Tab change handler
   const handleTabChange = useCallback((tab: FilterTab) => {

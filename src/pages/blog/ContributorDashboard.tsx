@@ -13,19 +13,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { BlogPost } from '@/components/blog/PostTable';
+import { formatDate } from '@/utils/formatDate';
 
 function getOracleBridgeUrl(): string {
   return import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
-}
-
-function formatDate(timestamp: number | null): string {
-  if (!timestamp) return '';
-  const ms = timestamp > 1e15 ? timestamp / 1_000_000 : timestamp;
-  return new Date(ms).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export default function ContributorDashboard() {
@@ -39,8 +30,10 @@ export default function ContributorDashboard() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch all posts (for contributor, the backend will filter by author if author param provided)
-      // For simplicity, we fetch all and filter client-side since we need the user's principal
+      // Fetch posts from blog canister via oracle-bridge.
+      // PRIVACY: The canister's list_posts_admin method filters by author for non-admin users
+      // (see blog/src/lib.rs lines 1312-1322). Authors only see their own posts, so client-side
+      // filtering here is safe and does not expose other authors' drafts.
       const response = await fetch(`${oracleBridgeUrl}/api/blog/posts?page=1&page_size=50`, {
         credentials: 'include',
       });
