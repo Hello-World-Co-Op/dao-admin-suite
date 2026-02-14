@@ -603,4 +603,82 @@ describe('BlogDashboard', () => {
       expect(callsAfterAdvance).toBe(callsBeforeAdvance);
     });
   });
+
+  // ==========================================================================
+  // Story 7.2: Operations Tab Tests
+  // ==========================================================================
+
+  describe('Operations tab (BL-008.7.2)', () => {
+    beforeEach(() => {
+      mockUseRoles.mockReturnValue({ roles: ['admin'] });
+      setupDefaultFetchMock({
+        // Mock author-roles endpoint
+        '/api/blog/author-roles': () => Promise.resolve({
+          ok: true,
+          json: async () => ({ roles: [] }),
+        }),
+        // Mock categories for readiness checklist
+        '/api/blog/categories': () => Promise.resolve({
+          ok: true,
+          json: async () => ([]),
+        }),
+      });
+    });
+
+    it('renders Operations link in sidebar (Task 4.6)', async () => {
+      renderDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-operations')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('sidebar-operations')).toHaveTextContent('Operations');
+    });
+
+    it('switches to operations view when Operations sidebar link is clicked (Task 4.1)', async () => {
+      renderDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('blog-dashboard')).toBeInTheDocument();
+      });
+
+      // Initially shows posts view
+      expect(screen.queryByTestId('operations-view')).not.toBeInTheDocument();
+
+      // Click Operations
+      fireEvent.click(screen.getByTestId('sidebar-operations'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('operations-view')).toBeInTheDocument();
+      });
+
+      // Operations view renders the three components
+      expect(screen.getByTestId('rebuild-status-monitor')).toBeInTheDocument();
+      expect(screen.getByTestId('author-management')).toBeInTheDocument();
+      expect(screen.getByTestId('readiness-checklist')).toBeInTheDocument();
+    });
+
+    it('switches back to posts view from operations (Task 4.1)', async () => {
+      renderDashboard();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('blog-dashboard')).toBeInTheDocument();
+      });
+
+      // Navigate to Operations
+      fireEvent.click(screen.getByTestId('sidebar-operations'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('operations-view')).toBeInTheDocument();
+      });
+
+      // Navigate back to Dashboard (posts)
+      fireEvent.click(screen.getByTestId('sidebar-posts'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('operations-view')).not.toBeInTheDocument();
+        expect(screen.getByTestId('rebuild-status')).toBeInTheDocument();
+      });
+    });
+  });
 });

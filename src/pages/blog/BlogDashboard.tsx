@@ -9,11 +9,13 @@
  * - Pagination
  * - Manual rebuild trigger and rebuild status display (Story 6.3)
  * - Auto-rebuild on publish/archive (Story 6.3)
+ * - Operations tab with rebuild monitor, author management, readiness checklist (Story 7.2)
  *
  * Renders BlogDashboard for admin role, ContributorDashboard for author role.
  *
  * @see BL-008.3.5 Task 4 - BlogDashboard layout
  * @see BL-008.6.3 - Admin Rebuild Trigger and Pipeline Integration
+ * @see BL-008.7.2 - Admin Operations Dashboard
  * @see AC1 - Admin dashboard with sidebar and PostTable
  * @see AC3 - Contributor dashboard with simplified view
  */
@@ -27,6 +29,9 @@ import { Pagination } from '@/components/blog/Pagination';
 import { ScheduleModal } from '@/components/blog/ScheduleModal';
 import { triggerRebuild, fetchRebuildStatus, type RebuildStatus } from '@/services/blog-rebuild-client';
 import ContributorDashboard from './ContributorDashboard';
+import RebuildStatusMonitor from '@/components/blog/RebuildStatusMonitor';
+import AuthorManagement from '@/components/blog/AuthorManagement';
+import ReadinessChecklist from '@/components/blog/ReadinessChecklist';
 
 const PAGE_SIZE = 10;
 
@@ -79,10 +84,18 @@ function formatTimeAgo(isoString: string): string {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+type DashboardView = 'posts' | 'operations';
+
 function AdminDashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
+
+  // View state: posts (default) or operations (BL-008.7.2)
+  const [activeView, setActiveView] = useState<DashboardView>(() => {
+    const view = searchParams.get('view');
+    return view === 'operations' ? 'operations' : 'posts';
+  });
 
   // State
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -224,13 +237,14 @@ function AdminDashboard() {
     fetchPosts();
   }, [fetchPosts]);
 
-  // Update URL params when tab or page changes
+  // Update URL params when tab, page, or view changes
   useEffect(() => {
     const params = new URLSearchParams();
+    if (activeView === 'operations') params.set('view', 'operations');
     if (activeTab !== 'all') params.set('status', activeTab);
     if (currentPage > 1) params.set('page', String(currentPage));
     setSearchParams(params, { replace: true });
-  }, [activeTab, currentPage, setSearchParams]);
+  }, [activeTab, currentPage, activeView, setSearchParams]);
 
   // Close archive dialog with Escape key
   useEffect(() => {
@@ -403,14 +417,17 @@ function AdminDashboard() {
           <nav className="space-y-1">
             <button
               type="button"
-              onClick={() => { navigate('/blog'); setSidebarOpen(false); }}
-              className="w-full text-left px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg"
+              onClick={() => { setActiveView('posts'); setSidebarOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg ${
+                activeView === 'posts' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+              data-testid="sidebar-posts"
             >
               Dashboard
             </button>
             <button
               type="button"
-              onClick={() => { setActiveTab('all'); setSidebarOpen(false); }}
+              onClick={() => { setActiveTab('all'); setActiveView('posts'); setSidebarOpen(false); }}
               className="w-full text-left px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
             >
               All Posts
@@ -421,6 +438,16 @@ function AdminDashboard() {
               className="w-full text-left px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
             >
               New Post
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveView('operations'); setSidebarOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg ${
+                activeView === 'operations' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+              data-testid="sidebar-operations"
+            >
+              Operations
             </button>
           </nav>
         </div>
@@ -437,92 +464,108 @@ function AdminDashboard() {
       {/* Main content */}
       <main className="flex-1 p-6 lg:p-8" data-testid="blog-main-content">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Blog Dashboard</h1>
-              {/* Rebuild status display (Story 6.3 - Task 1.5) */}
-              <p className="text-sm text-gray-500 mt-1" data-testid="rebuild-status">
-                {rebuildStatus?.pending && 'Rebuild pending... '}
-                {rebuildStatus?.last_rebuild_at
-                  ? `Last rebuild: ${formatTimeAgo(rebuildStatus.last_rebuild_at)}`
-                  : 'Last rebuild: Never'}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleRebuildSite}
-                disabled={rebuildLoading}
-                className={`px-4 py-2 border rounded-lg font-medium flex items-center gap-2 ${
-                  rebuildLoading
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-                data-testid="rebuild-site-button"
-              >
-                <svg className={`w-4 h-4 ${rebuildLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {rebuildLoading ? 'Rebuilding...' : 'Rebuild Site'}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/blog/editor/new')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                data-testid="new-post-button"
-              >
-                New Post
-              </button>
-            </div>
-          </div>
-
-          {/* Status filter tabs */}
-          <StatusFilterTabs
-            posts={posts}
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-          />
-
-          {/* Loading state */}
-          {loading && (
-            <div className="flex justify-center py-12" data-testid="loading-spinner">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
-            </div>
-          )}
-
-          {/* Error state */}
-          {error && !loading && (
-            <div className="text-center py-12" data-testid="error-state">
-              <p className="text-red-600 mb-4">{error}</p>
-              <button
-                type="button"
-                onClick={fetchPosts}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                data-testid="retry-button"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Post table */}
-          {!loading && !error && (
+          {activeView === 'posts' && (
             <>
-              <PostTable
-                posts={filteredPosts}
-                onPublish={handlePublish}
-                onSchedule={handleScheduleClick}
-                onArchive={handleArchiveClick}
-                isAdmin={true}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Blog Dashboard</h1>
+                  {/* Rebuild status display (Story 6.3 - Task 1.5) */}
+                  <p className="text-sm text-gray-500 mt-1" data-testid="rebuild-status">
+                    {rebuildStatus?.pending && 'Rebuild pending... '}
+                    {rebuildStatus?.last_rebuild_at
+                      ? `Last rebuild: ${formatTimeAgo(rebuildStatus.last_rebuild_at)}`
+                      : 'Last rebuild: Never'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRebuildSite}
+                    disabled={rebuildLoading}
+                    className={`px-4 py-2 border rounded-lg font-medium flex items-center gap-2 ${
+                      rebuildLoading
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    data-testid="rebuild-site-button"
+                  >
+                    <svg className={`w-4 h-4 ${rebuildLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {rebuildLoading ? 'Rebuilding...' : 'Rebuild Site'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/blog/editor/new')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    data-testid="new-post-button"
+                  >
+                    New Post
+                  </button>
+                </div>
+              </div>
+
+              {/* Status filter tabs */}
+              <StatusFilterTabs
+                posts={posts}
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
               />
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalPosts}
-                pageSize={PAGE_SIZE}
-                onPageChange={handlePageChange}
-              />
+
+              {/* Loading state */}
+              {loading && (
+                <div className="flex justify-center py-12" data-testid="loading-spinner">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
+                </div>
+              )}
+
+              {/* Error state */}
+              {error && !loading && (
+                <div className="text-center py-12" data-testid="error-state">
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <button
+                    type="button"
+                    onClick={fetchPosts}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    data-testid="retry-button"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              )}
+
+              {/* Post table */}
+              {!loading && !error && (
+                <>
+                  <PostTable
+                    posts={filteredPosts}
+                    onPublish={handlePublish}
+                    onSchedule={handleScheduleClick}
+                    onArchive={handleArchiveClick}
+                    isAdmin={true}
+                  />
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalPosts}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={handlePageChange}
+                  />
+                </>
+              )}
             </>
+          )}
+
+          {/* Operations View (BL-008.7.2 Task 4) */}
+          {activeView === 'operations' && (
+            <div data-testid="operations-view">
+              <h1 className="text-2xl font-bold text-gray-900 mb-6">Operations</h1>
+              <div className="space-y-6">
+                <RebuildStatusMonitor />
+                <AuthorManagement />
+                <ReadinessChecklist />
+              </div>
+            </div>
           )}
         </div>
       </main>
