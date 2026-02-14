@@ -32,6 +32,8 @@ import ContributorDashboard from './ContributorDashboard';
 import RebuildStatusMonitor from '@/components/blog/RebuildStatusMonitor';
 import AuthorManagement from '@/components/blog/AuthorManagement';
 import ReadinessChecklist from '@/components/blog/ReadinessChecklist';
+import BlogHealthPanel from '@/components/blog/BlogHealthPanel';
+import CanisterHealthPanel from '@/components/blog/CanisterHealthPanel';
 
 const PAGE_SIZE = 10;
 
@@ -556,11 +558,13 @@ function AdminDashboard() {
             </>
           )}
 
-          {/* Operations View (BL-008.7.2 Task 4) */}
+          {/* Operations View (BL-008.7.2 Task 4, BL-008.7.3 Task 1 & 4) */}
           {activeView === 'operations' && (
             <div data-testid="operations-view">
               <h1 className="text-2xl font-bold text-gray-900 mb-6">Operations</h1>
               <div className="space-y-6">
+                <CanisterHealthPanel />
+                <BlogHealthPanel posts={posts} />
                 <RebuildStatusMonitor />
                 <AuthorManagement />
                 <ReadinessChecklist />
