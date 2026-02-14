@@ -11,7 +11,8 @@
  * @see BL-008.3.1 - Tiptap Spike (original implementation)
  */
 
-import { SUPPORTED_LANGUAGES } from '@/pages/blog/EditorSpike';
+/** Supported languages for code block syntax highlighting */
+export const SUPPORTED_LANGUAGES = ['rust', 'typescript', 'json', 'bash'] as const;
 
 interface LanguageSelectorProps {
   currentLanguage: string | null;

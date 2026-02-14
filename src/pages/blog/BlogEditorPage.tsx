@@ -163,7 +163,9 @@ export default function BlogEditorPage() {
     onUpdate: () => {
       if (pasteCleanedRef.current) {
         pasteCleanedRef.current = false;
-        showToast('Some formatting was simplified.');
+        // AC5: Include "[Review changes]" action text in toast
+        // V1: No clickable action yet - full diff viewer in future story
+        showToast('Some formatting was simplified. Review changes in the editor.');
       }
     },
   });

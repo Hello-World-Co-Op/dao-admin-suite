@@ -13,7 +13,7 @@
 
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from '@hello-world-co-op/auth';
+import { AuthProvider, RoleGuard } from '@hello-world-co-op/auth';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
@@ -63,9 +63,28 @@ export default function App() {
               {/* Spike: Tiptap editor validation (BL-008.3.1) - temporary, no auth required */}
               <Route path="/blog/spike-editor" element={<EditorSpike />} />
 
-              {/* Blog editor routes - require authentication + admin/author role (BL-008.3.2) */}
-              <Route path="/blog/editor/new" element={<ProtectedRoute><BlogEditorPage /></ProtectedRoute>} />
-              <Route path="/blog/editor/:id" element={<ProtectedRoute><BlogEditorPage /></ProtectedRoute>} />
+              {/* Blog editor routes - require authentication + admin role (BL-008.3.2) */}
+              {/* TODO: Add 'author' role support when author RBAC is implemented */}
+              <Route
+                path="/blog/editor/new"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard requiredRole="admin">
+                      <BlogEditorPage />
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/blog/editor/:id"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard requiredRole="admin">
+                      <BlogEditorPage />
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
 
               {/* All admin routes require authentication + admin role via ProtectedRoute */}
               <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
