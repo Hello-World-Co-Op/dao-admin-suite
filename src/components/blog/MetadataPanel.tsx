@@ -1,17 +1,20 @@
 /**
  * MetadataPanel Component
  *
- * Story BL-008.3.3: Post Creation Form and Metadata Panel
- * Task 8: Create collapsible MetadataPanel component
+ * Story BL-008.3.3: Post Creation Form and Metadata Panel (base)
+ * Story BL-008.3.6: Extended with OG image section (AC2, AC3)
  *
  * Features:
  * - Collapsible panel with expand/collapse toggle
- * - Contains: SlugField, ExcerptEditor, CategorySelector, TagInput, SEOPreview
+ * - Contains: SlugField, ExcerptEditor, CategorySelector, TagInput, OGImagePreview, SEOPreview
  * - Default collapsed for new posts, expanded for existing posts with metadata
  * - Reading time display in header
+ * - OG image preview with auto-detection support
  * - Accessibility: aria-expanded, role="region", aria-labelledby
  *
- * @see AC2 - MetadataPanel components
+ * @see BL-008.3.3 AC2 - MetadataPanel components
+ * @see BL-008.3.6 AC2 - OG image upload
+ * @see BL-008.3.6 AC3 - Auto-OG detection
  */
 
 import { useState, useCallback } from 'react';
@@ -20,6 +23,7 @@ import { ExcerptEditor } from './ExcerptEditor';
 import { CategorySelector } from './CategorySelector';
 import { TagInput } from './TagInput';
 import { SEOPreview } from './SEOPreview';
+import { OGImagePreview } from './OGImagePreview';
 
 interface MetadataPanelProps {
   title: string;
@@ -39,6 +43,12 @@ interface MetadataPanelProps {
   oracleBridgeUrl?: string;
   /** Called when a metadata field loses focus, to persist changes to canister */
   onMetadataBlur?: () => void;
+  /** Custom OG image URL */
+  ogImageUrl?: string | null;
+  /** Auto-detected OG image URL from post body */
+  autoOgImageUrl?: string | null;
+  /** Called when OG image changes */
+  onOGImageChange?: (url: string | null) => void;
 }
 
 export function MetadataPanel({
@@ -58,6 +68,9 @@ export function MetadataPanel({
   slugError,
   oracleBridgeUrl,
   onMetadataBlur,
+  ogImageUrl,
+  autoOgImageUrl,
+  onOGImageChange,
 }: MetadataPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded ?? false);
 
@@ -68,6 +81,8 @@ export function MetadataPanel({
       onMetadataBlur?.();
     }
   }, [onMetadataBlur]);
+
+  const displayOgUrl = ogImageUrl || autoOgImageUrl || null;
 
   return (
     <div
@@ -143,10 +158,21 @@ export function MetadataPanel({
             onChange={onTagsChange}
           />
 
+          {/* OG Image Section (BL-008.3.6 AC2, AC3) */}
+          {onOGImageChange && (
+            <OGImagePreview
+              ogImageUrl={ogImageUrl ?? null}
+              autoOgImageUrl={autoOgImageUrl ?? null}
+              onOGImageChange={onOGImageChange}
+              oracleBridgeUrl={oracleBridgeUrl || ''}
+            />
+          )}
+
           <SEOPreview
             title={title}
             slug={slug}
             excerpt={excerpt || autoExcerpt}
+            ogImageUrl={displayOgUrl}
           />
         </div>
       )}

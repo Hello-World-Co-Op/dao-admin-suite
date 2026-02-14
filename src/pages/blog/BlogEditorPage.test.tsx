@@ -745,7 +745,7 @@ describe('BlogEditorPage', () => {
       });
     });
 
-    it('shows error and redirects on 404', async () => {
+    it('shows error and redirects on 404 (AC5: NotFound -> redirect to /blog + toast)', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/blog/categories')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
@@ -763,7 +763,12 @@ describe('BlogEditorPage', () => {
       renderEditor('/blog/editor/not-found');
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/blog/editor/new');
+        // AC5: NotFound -> redirect to /blog (per BlogError mapping)
+        expect(mockNavigate).toHaveBeenCalledWith('/blog');
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Post not found')).toBeInTheDocument();
       });
     });
   });

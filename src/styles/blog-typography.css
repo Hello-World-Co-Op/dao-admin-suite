@@ -1,0 +1,198 @@
+/**
+ * Blog Typography CSS
+ *
+ * Shared typography styles for blog content rendering.
+ * Used identically in both dao-admin-suite (preview) and marketing-suite (published).
+ *
+ * Scoped under .blog-content to avoid leaking into admin UI.
+ * Uses Tailwind Typography (prose) classes as the base, with custom overrides.
+ *
+ * NOTE: This file will be migrated to @hello-world-co-op/ui package (BL-008.5.1).
+ * Until then, it is co-located in dao-admin-suite.
+ *
+ * @see BL-008.3.6 AC1 - Preview must match published rendering
+ * @see BL-008.5.1 - Typography CSS in shared package (future)
+ */
+
+.blog-content {
+  /* Base typography: Tailwind prose prose-lg prose-neutral dark:prose-invert */
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  line-height: 1.75;
+  color: #404040;
+  max-width: 65ch;
+  margin: 0 auto;
+}
+
+/* Headings */
+.blog-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.33;
+  margin-top: 2em;
+  margin-bottom: 1em;
+  color: #171717;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.blog-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.6;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  color: #171717;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Paragraphs */
+.blog-content p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+/* Bold and Italic */
+.blog-content strong {
+  font-weight: 700;
+  color: #171717;
+}
+
+.blog-content em {
+  font-style: italic;
+}
+
+/* Links */
+.blog-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.blog-content a:hover {
+  color: #1d4ed8;
+}
+
+/* Blockquotes */
+.blog-content blockquote {
+  border-left: 3px solid #d4d4d4;
+  padding-left: 1em;
+  margin-top: 1.6em;
+  margin-bottom: 1.6em;
+  font-style: italic;
+  color: #525252;
+}
+
+/* Code blocks - dark theme */
+.blog-content pre {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin-top: 1.75em;
+  margin-bottom: 1.75em;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.blog-content pre code {
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  padding: 0;
+  border: none;
+}
+
+/* Inline code */
+.blog-content code {
+  background-color: #f5f5f5;
+  color: #171717;
+  font-size: 0.875em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-weight: 500;
+}
+
+/* Images */
+.blog-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+
+/* Unordered lists */
+.blog-content ul {
+  list-style-type: disc;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-left: 1.625em;
+}
+
+.blog-content ul > li {
+  padding-left: 0.375em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Ordered lists */
+.blog-content ol {
+  list-style-type: decimal;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  padding-left: 1.625em;
+}
+
+.blog-content ol > li {
+  padding-left: 0.375em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Nested lists */
+.blog-content ul ul,
+.blog-content ol ul {
+  list-style-type: circle;
+}
+
+.blog-content ul ol,
+.blog-content ol ol {
+  list-style-type: lower-alpha;
+}
+
+/* Horizontal rules */
+.blog-content hr {
+  border-top: 1px solid #d4d4d4;
+  margin-top: 3em;
+  margin-bottom: 3em;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .blog-content {
+    color: #d4d4d4;
+  }
+
+  .blog-content h2,
+  .blog-content h3,
+  .blog-content strong {
+    color: #f5f5f5;
+  }
+
+  .blog-content blockquote {
+    border-left-color: #525252;
+    color: #a3a3a3;
+  }
+
+  .blog-content code {
+    background-color: #262626;
+    color: #f5f5f5;
+  }
+
+  .blog-content hr {
+    border-top-color: #525252;
+  }
+}

@@ -8,13 +8,16 @@
  * - Slash commands for block insertion (/image, /code, /quote, /hr)
  * - Paste handling with cleaning notifications
  * - Code block syntax highlighting with 4 pinned languages
- * - MetadataPanel with slug, excerpt, categories, tags, SEO preview (Story 3.3)
+ * - MetadataPanel with slug, excerpt, categories, tags, OG image, SEO preview (Story 3.3 + 3.6)
  * - Save via oracle-bridge to blog canister (Story 3.3)
  * - Auto-save with trailing debounce (60s) + max-wait (5min) (Story 3.4)
  * - Crash recovery via localStorage backup (Story 3.4)
  * - Save status indicators with ARIA live regions (Story 3.4)
  * - StaleEdit conflict detection and persistent banner (Story 3.4)
  * - Inline re-auth prompt on session expiry (Story 3.4)
+ * - Post preview with blog typography (Story 3.6)
+ * - OG image management with auto-detection (Story 3.6)
+ * - BlogError -> UX feedback mapping (Story 3.6)
  *
  * Code-split via React.lazy() with Suspense fallback for LCP < 2.5s (NFR2).
  * Editor chunk must remain under 200KB gzip (NFR7).
@@ -24,6 +27,7 @@
  * @see BL-008.3.2 - Blog Editor Core -- Rich-Text Editing and Formatting
  * @see BL-008.3.3 - Post Creation Form and Metadata Panel
  * @see BL-008.3.4 - Auto-Save, Crash Recovery, and Save Indicators
+ * @see BL-008.3.6 - Post Preview and OG Image Management
  */
 
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
@@ -46,6 +50,7 @@ import { MetadataPanel } from '@/components/blog/MetadataPanel';
 import { SaveStatusIndicator } from '@/components/blog/SaveStatusIndicator';
 import { PersistentBanner } from '@/components/blog/PersistentBanner';
 import { RecoveryPrompt } from '@/components/blog/RecoveryPrompt';
+import { BlogPreview } from '@/components/blog/BlogPreview';
 import { checkForRecovery, clearBackup } from '@/utils/recovery';
 import { InlineReAuthPrompt } from '@/components/blog/InlineReAuthPrompt';
 import { useAutoSave } from '@/hooks/useAutoSave';
@@ -54,6 +59,9 @@ import { generateSlug } from '@/utils/slug-generator';
 import { calculateReadingTime } from '@/utils/reading-time';
 import { generateAutoExcerpt } from '@/utils/auto-excerpt';
 import { saveDraft } from '@/utils/blogApi';
+import { findAutoOGCandidate } from '@/utils/ogImageUtils';
+import { mapBlogError } from '@/utils/blogErrorMapper';
+import type { BlogError } from '@/utils/blogErrorMapper';
 
 // Register ONLY 4 languages (not common's 37 or all 190+) to minimize bundle size
 // highlight.js@11.11.1 pinned for marketing-suite visual parity (Story 5.2)
@@ -115,6 +123,16 @@ export default function BlogEditorPage() {
   const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false);
   const [recoveryBody, setRecoveryBody] = useState<string>('');
 
+  // Preview state (Story 3.6)
+  const [showPreview, setShowPreview] = useState(false);
+
+  // OG Image state (Story 3.6)
+  const [ogImageUrl, setOgImageUrl] = useState<string | null>(null);
+  const [autoOgImageUrl, setAutoOgImageUrl] = useState<string | null>(null);
+
+  // Error state for inline field errors (Story 3.6 AC5)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
 
   // Show toast notification
@@ -135,6 +153,38 @@ export default function BlogEditorPage() {
     }
     setToast({ visible: false, message: '' });
   }, []);
+
+  // Blog error handler (Story 3.6 AC5)
+  const handleBlogError = useCallback((error: BlogError) => {
+    const feedback = mapBlogError(error);
+
+    switch (feedback.type) {
+      case 'redirect':
+        if (feedback.redirectTo) {
+          navigate(feedback.redirectTo);
+        }
+        showToast(feedback.message);
+        break;
+
+      case 'toast':
+        showToast(feedback.message);
+        if (error.variant === 'InternalError') {
+          console.error('[BlogError]', error);
+        }
+        break;
+
+      case 'inline':
+        if (feedback.field) {
+          setFieldErrors(prev => ({ ...prev, [feedback.field!]: feedback.message }));
+        }
+        break;
+
+      case 'banner':
+        setShowStaleEdit(true);
+        setStaleEditMessage(feedback.message);
+        break;
+    }
+  }, [navigate, showToast]);
 
   // Clean up timers on unmount
   useEffect(() => {
@@ -236,7 +286,7 @@ export default function BlogEditorPage() {
     };
   }, [editor, markDirty]);
 
-  // Debounced reading time and auto-excerpt update (Task 17)
+  // Debounced reading time, auto-excerpt, and auto-OG detection (Task 17 + Story 3.6 AC3)
   useEffect(() => {
     if (!editor) return;
 
@@ -248,6 +298,12 @@ export default function BlogEditorPage() {
         const html = editor.getHTML();
         setReadingTime(calculateReadingTime(html));
         setAutoExcerpt(generateAutoExcerpt(html));
+
+        // Auto-OG detection (Story 3.6 AC3) - only if no custom OG set
+        if (!ogImageUrl) {
+          const candidate = findAutoOGCandidate(html);
+          setAutoOgImageUrl(candidate);
+        }
       }, 500);
     };
 
@@ -258,7 +314,7 @@ export default function BlogEditorPage() {
     return () => {
       editor.off('update', handleUpdate);
     };
-  }, [editor]);
+  }, [editor, ogImageUrl]);
 
   // Load existing post on mount (Task 18) + crash recovery check (Task 4)
   useEffect(() => {
@@ -273,8 +329,16 @@ export default function BlogEditorPage() {
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          showToast(errData.message || 'Failed to load post');
-          navigate('/blog/editor/new');
+
+          // Use BlogError mapping (Story 3.6 AC5)
+          if (response.status === 404) {
+            handleBlogError({ variant: 'NotFound' });
+          } else if (response.status === 401 || response.status === 403) {
+            handleBlogError({ variant: 'Unauthorized' });
+          } else {
+            showToast(errData.message || 'Failed to load post');
+            navigate('/blog/editor/new');
+          }
           return;
         }
 
@@ -287,6 +351,9 @@ export default function BlogEditorPage() {
         setCurrentPostId(post.id);
         setUpdatedAt(post.updated_at);
         setIsPublished(post.status === 'Published');
+        if (post.og_image_url) {
+          setOgImageUrl(post.og_image_url);
+        }
 
         if (editor && post.body) {
           editor.commands.setContent(post.body);
@@ -310,7 +377,7 @@ export default function BlogEditorPage() {
     }
 
     loadPost();
-  }, [postId, oracleBridgeUrl, editor, navigate, showToast]);
+  }, [postId, oracleBridgeUrl, editor, navigate, showToast, handleBlogError]);
 
   // Handle recovery actions (Task 4.9, 4.10)
   const handleRecover = useCallback(() => {
@@ -361,6 +428,17 @@ export default function BlogEditorPage() {
     }
   }, [slug, title]);
 
+  // Handle OG image change (Story 3.6 AC2)
+  const handleOGImageChange = useCallback((url: string | null) => {
+    setOgImageUrl(url);
+    // If custom OG is cleared, re-run auto-detection
+    if (!url && editor) {
+      const html = editor.getHTML();
+      const candidate = findAutoOGCandidate(html);
+      setAutoOgImageUrl(candidate);
+    }
+  }, [editor]);
+
   // Save draft handler (Task 7 + Task 19)
   const handleSaveDraft = useCallback(async () => {
     if (!editor) return;
@@ -382,10 +460,11 @@ export default function BlogEditorPage() {
           setUpdatedAt(result.updated_at);
           showToast('Draft saved successfully');
         } else if (result.error === 'StaleEdit') {
-          setShowStaleEdit(true);
-          setStaleEditMessage(result.message || 'This post was modified in another session. Reload to see latest changes.');
+          handleBlogError({ variant: 'StaleEdit', message: result.message });
         } else if (result.error === 'Unauthorized') {
-          setShowReAuthPrompt(true);
+          handleBlogError({ variant: 'Unauthorized' });
+        } else if (result.error === 'PostTooLarge') {
+          handleBlogError({ variant: 'PostTooLarge', message: result.message });
         } else {
           showToast(result.message || 'Failed to save draft');
         }
@@ -410,11 +489,11 @@ export default function BlogEditorPage() {
       }
     } catch (error) {
       console.error('[BlogEditor] Save error:', error);
-      showToast('Failed to save draft. Please try again.');
+      handleBlogError({ variant: 'InternalError', message: 'Failed to save draft. Please try again.' });
     } finally {
       setSaving(false);
     }
-  }, [editor, title, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, showStaleEdit]);
+  }, [editor, title, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, showStaleEdit, handleBlogError]);
 
   // Update metadata via canister (Task 20)
   const handleMetadataUpdate = useCallback(async () => {
@@ -432,6 +511,7 @@ export default function BlogEditorPage() {
           excerpt: excerpt || undefined,
           categories: categories.length > 0 ? categories : undefined,
           tags: tags.length > 0 ? tags : undefined,
+          og_image_url: ogImageUrl || undefined,
           expected_updated_at: updatedAt,
         }),
       });
@@ -439,10 +519,9 @@ export default function BlogEditorPage() {
       const data = await response.json();
       if (!response.ok) {
         if (response.status === 409 && data.message?.includes('slug')) {
-          setSlugError(data.message);
+          handleBlogError({ variant: 'SlugTaken' });
         } else if (response.status === 409) {
-          setShowStaleEdit(true);
-          setStaleEditMessage(data.message);
+          handleBlogError({ variant: 'StaleEdit', message: data.message });
         } else {
           showToast(data.message || 'Failed to update metadata');
         }
@@ -451,12 +530,13 @@ export default function BlogEditorPage() {
 
       setUpdatedAt(data.updated_at);
       setSlugError(null);
+      setFieldErrors({});
       showToast('Metadata saved');
     } catch (error) {
       console.error('[BlogEditor] Metadata update error:', error);
-      showToast('Failed to save metadata. Please try again.');
+      handleBlogError({ variant: 'InternalError', message: 'Failed to save metadata. Please try again.' });
     }
-  }, [currentPostId, updatedAt, oracleBridgeUrl, title, slug, excerpt, categories, tags, showToast]);
+  }, [currentPostId, updatedAt, oracleBridgeUrl, title, slug, excerpt, categories, tags, ogImageUrl, showToast, handleBlogError]);
 
   if (loading) {
     return (
@@ -526,6 +606,20 @@ export default function BlogEditorPage() {
               Ready for Review
             </label>
           )}
+          {/* Preview button (Story 3.6 AC1) */}
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+            aria-label="Preview post"
+            data-testid="preview-button"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Preview
+          </button>
           <button
             type="button"
             onClick={handleSaveDraft}
@@ -541,6 +635,18 @@ export default function BlogEditorPage() {
           </button>
         </div>
       </div>
+
+      {/* Inline field errors (Story 3.6 AC5) */}
+      {fieldErrors.editor && (
+        <div
+          className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"
+          role="alert"
+          aria-describedby="editor-error"
+          data-testid="inline-error-editor"
+        >
+          <p id="editor-error">{fieldErrors.editor}</p>
+        </div>
+      )}
 
       {/* Main content area: editor + metadata panel */}
       <div className="flex flex-col lg:flex-row gap-4">
@@ -578,12 +684,24 @@ export default function BlogEditorPage() {
             readingTime={readingTime}
             isPublished={isPublished}
             isExpanded={!!currentPostId}
-            slugError={slugError}
+            slugError={slugError || fieldErrors.slug || null}
             oracleBridgeUrl={oracleBridgeUrl}
             onMetadataBlur={handleMetadataUpdate}
+            ogImageUrl={ogImageUrl}
+            autoOgImageUrl={autoOgImageUrl}
+            onOGImageChange={handleOGImageChange}
           />
         </div>
       </div>
+
+      {/* Blog Preview Modal (Story 3.6 AC1) */}
+      <BlogPreview
+        visible={showPreview}
+        onClose={() => setShowPreview(false)}
+        title={title}
+        htmlContent={editor?.getHTML() || ''}
+        readingTime={readingTime}
+      />
 
       {/* Toast notification */}
       {toast.visible && (
