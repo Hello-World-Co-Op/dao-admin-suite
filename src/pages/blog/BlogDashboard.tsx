@@ -564,7 +564,7 @@ function AdminDashboard() {
               <h1 className="text-2xl font-bold text-gray-900 mb-6">Operations</h1>
               <div className="space-y-6">
                 <CanisterHealthPanel />
-                <BlogHealthPanel posts={posts} />
+                <BlogHealthPanel />
                 <RebuildStatusMonitor />
                 <AuthorManagement />
                 <ReadinessChecklist />

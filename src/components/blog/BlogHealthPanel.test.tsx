@@ -6,6 +6,7 @@
  * - Loading/progress state display
  * - Results table (broken, CORS, success)
  * - CORS results separated from broken results
+ * - Fetch error display
  *
  * @see BL-008.7.3 Task 5.1
  */
@@ -13,7 +14,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BlogHealthPanel from './BlogHealthPanel';
-import type { PostMetadataForScan } from '@/hooks/useBrokenImageScanner';
 
 // Mock the useBrokenImageScanner hook
 const mockScan = vi.fn();
@@ -28,11 +28,6 @@ vi.mock('@/hooks/useBrokenImageScanner', async () => {
   };
 });
 
-const defaultPosts: PostMetadataForScan[] = [
-  { id: 1, title: 'Post 1', slug: 'post-1', featured_image_url: 'https://a.com/img.jpg' },
-  { id: 2, title: 'Post 2', slug: 'post-2', og_image_url: 'https://b.com/img.jpg' },
-];
-
 describe('BlogHealthPanel', () => {
   beforeEach(() => {
     mockUseBrokenImageScanner.mockReturnValue({
@@ -41,6 +36,7 @@ describe('BlogHealthPanel', () => {
       results: [],
       progress: { checked: 0, total: 0 },
       reset: mockReset,
+      fetchError: null,
     });
   });
 
@@ -49,17 +45,17 @@ describe('BlogHealthPanel', () => {
   });
 
   it('should render the scan button', () => {
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
     expect(screen.getByTestId('scan-button')).toBeInTheDocument();
     expect(screen.getByText('Scan for Broken Images')).toBeInTheDocument();
   });
 
-  it('should call scan when button is clicked', () => {
-    render(<BlogHealthPanel posts={defaultPosts} />);
+  it('should call scan with no arguments when button is clicked', () => {
+    render(<BlogHealthPanel />);
     fireEvent.click(screen.getByTestId('scan-button'));
 
     expect(mockReset).toHaveBeenCalled();
-    expect(mockScan).toHaveBeenCalledWith(defaultPosts);
+    expect(mockScan).toHaveBeenCalledWith();
   });
 
   it('should show loading state while scanning', () => {
@@ -69,9 +65,10 @@ describe('BlogHealthPanel', () => {
       results: [],
       progress: { checked: 3, total: 10 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByText('Scanning...')).toBeInTheDocument();
     expect(screen.getByTestId('scan-progress')).toBeInTheDocument();
@@ -85,9 +82,10 @@ describe('BlogHealthPanel', () => {
       results: [],
       progress: { checked: 0, total: 5 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
     expect(screen.getByTestId('scan-button')).toBeDisabled();
   });
 
@@ -105,9 +103,10 @@ describe('BlogHealthPanel', () => {
       ],
       progress: { checked: 2, total: 2 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByTestId('scan-results')).toBeInTheDocument();
     expect(screen.getByText('Broken Images (1)')).toBeInTheDocument();
@@ -128,9 +127,10 @@ describe('BlogHealthPanel', () => {
       ],
       progress: { checked: 1, total: 1 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByText('Unable to Verify (1)')).toBeInTheDocument();
     expect(screen.getByText('Unable to verify')).toBeInTheDocument();
@@ -150,9 +150,10 @@ describe('BlogHealthPanel', () => {
       ],
       progress: { checked: 1, total: 1 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByText('Broken Images (1)')).toBeInTheDocument();
     expect(screen.getByText('Timeout')).toBeInTheDocument();
@@ -165,9 +166,10 @@ describe('BlogHealthPanel', () => {
       results: [],
       progress: { checked: 5, total: 5 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByTestId('scan-success')).toBeInTheDocument();
     expect(screen.getByText(/All 5 images are working correctly/)).toBeInTheDocument();
@@ -187,9 +189,10 @@ describe('BlogHealthPanel', () => {
       ],
       progress: { checked: 1, total: 1 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     const link = screen.getByText('My Blog Post');
     expect(link).toBeInTheDocument();
@@ -210,11 +213,28 @@ describe('BlogHealthPanel', () => {
       ],
       progress: { checked: 1, total: 1 },
       reset: mockReset,
+      fetchError: null,
     });
 
-    render(<BlogHealthPanel posts={defaultPosts} />);
+    render(<BlogHealthPanel />);
 
     expect(screen.getByText('Post A')).toBeInTheDocument();
     expect(screen.getByText('Post B')).toBeInTheDocument();
+  });
+
+  it('should display fetch error when posts cannot be loaded', () => {
+    mockUseBrokenImageScanner.mockReturnValue({
+      scan: mockScan,
+      scanning: false,
+      results: [],
+      progress: { checked: 0, total: 0 },
+      reset: mockReset,
+      fetchError: 'Failed to fetch published posts: 401',
+    });
+
+    render(<BlogHealthPanel />);
+
+    expect(screen.getByTestId('scan-fetch-error')).toBeInTheDocument();
+    expect(screen.getByText('Failed to fetch published posts: 401')).toBeInTheDocument();
   });
 });

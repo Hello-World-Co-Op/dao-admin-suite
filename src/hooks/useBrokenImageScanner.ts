@@ -94,6 +94,11 @@ export function buildUrlPostMap(
  * Check a single URL by making a HEAD request with 10-second timeout.
  * Returns null if the URL is OK (200-level response).
  * Returns a BrokenImageResult if the URL is broken, timed out, or CORS-blocked.
+ *
+ * Uses default 'cors' mode so we can read actual HTTP status codes.
+ * - Same-origin images (IC asset canister): return real HTTP status -> detect 404
+ * - Cross-origin with CORS headers: return real HTTP status -> detect 404
+ * - Cross-origin without CORS headers: throw TypeError -> categorize as "cors" (unable to verify)
  */
 export async function checkImageUrl(
   url: string,
@@ -106,16 +111,11 @@ export async function checkImageUrl(
     const response = await fetch(url, {
       method: 'HEAD',
       signal: controller.signal,
-      mode: 'no-cors',
     });
 
     clearTimeout(timeoutId);
 
-    // In no-cors mode, we get an opaque response (type: 'opaque', status: 0)
-    // which means the request was sent but we can't read the response.
-    // A truly broken URL would throw a network error, not return opaque.
-    // Only report as broken if we get a non-opaque, non-OK response.
-    if (response.type !== 'opaque' && !response.ok) {
+    if (!response.ok) {
       return {
         url,
         status: response.status,
@@ -135,7 +135,7 @@ export async function checkImageUrl(
       };
     }
 
-    // Network error or CORS error — treat as "unable to verify"
+    // TypeError from fetch = CORS or network error — treat as "unable to verify"
     return {
       url,
       status: 'cors',
@@ -145,14 +145,54 @@ export async function checkImageUrl(
   }
 }
 
+function getOracleBridgeUrl(): string {
+  return import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
+}
+
+/**
+ * Fetch all published posts from the blog canister via oracle-bridge.
+ * Uses a large page size to get all posts in a single request,
+ * with status=Published filter applied server-side.
+ */
+export async function fetchAllPublishedPosts(): Promise<PostMetadataForScan[]> {
+  const oracleBridgeUrl = getOracleBridgeUrl();
+  const params = new URLSearchParams({
+    page: '1',
+    page_size: '1000',
+    status: 'Published',
+  });
+
+  const response = await fetch(`${oracleBridgeUrl}/api/blog/posts?${params}`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch published posts: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return (data.posts || []) as PostMetadataForScan[];
+}
+
 export function useBrokenImageScanner() {
   const [scanning, setScanning] = useState(false);
   const [results, setResults] = useState<BrokenImageResult[]>([]);
   const [progress, setProgress] = useState<ScanProgress>({ checked: 0, total: 0 });
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const scan = useCallback(async (posts: PostMetadataForScan[]) => {
+  const scan = useCallback(async () => {
     setScanning(true);
     setResults([]);
+    setFetchError(null);
+
+    let posts: PostMetadataForScan[];
+    try {
+      posts = await fetchAllPublishedPosts();
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to fetch posts');
+      setScanning(false);
+      return;
+    }
 
     // Build de-duplicated URL map
     const urlMap = buildUrlPostMap(posts);
@@ -176,7 +216,8 @@ export function useBrokenImageScanner() {
   const reset = useCallback(() => {
     setResults([]);
     setProgress({ checked: 0, total: 0 });
+    setFetchError(null);
   }, []);
 
-  return { scan, scanning, results, progress, reset };
+  return { scan, scanning, results, progress, reset, fetchError };
 }

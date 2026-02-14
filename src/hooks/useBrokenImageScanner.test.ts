@@ -189,7 +189,6 @@ describe('checkImageUrl', () => {
   it('should return null for successful response', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      type: 'basic',
       status: 200,
     } as Response);
 
@@ -197,21 +196,9 @@ describe('checkImageUrl', () => {
     expect(result).toBeNull();
   });
 
-  it('should return null for opaque response (no-cors success)', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false,
-      type: 'opaque',
-      status: 0,
-    } as Response);
-
-    const result = await checkImageUrl('https://example.com/cors.jpg', mockPostInfo);
-    expect(result).toBeNull();
-  });
-
   it('should return broken result for 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
-      type: 'basic',
       status: 404,
     } as Response);
 
@@ -225,12 +212,19 @@ describe('checkImageUrl', () => {
   it('should return broken result for 500', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
-      type: 'basic',
       status: 500,
     } as Response);
 
     const result = await checkImageUrl('https://example.com/error.jpg', mockPostInfo);
     expect(result?.status).toBe(500);
+  });
+
+  it('should return cors for TypeError (cross-origin without CORS headers)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const result = await checkImageUrl('https://no-cors.com/img.jpg', mockPostInfo);
+    expect(result).not.toBeNull();
+    expect(result?.status).toBe('cors');
   });
 
   it('should return timeout for AbortError', async () => {
@@ -270,37 +264,38 @@ describe('useBrokenImageScanner', () => {
     expect(result.current.scanning).toBe(false);
     expect(result.current.results).toEqual([]);
     expect(result.current.progress).toEqual({ checked: 0, total: 0 });
+    expect(result.current.fetchError).toBeNull();
   });
 
-  it('should scan posts and find broken images', async () => {
+  it('should fetch published posts and find broken images', async () => {
     let callCount = 0;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       callCount++;
+      // First call: fetch published posts from API
       if (callCount === 1) {
-        return { ok: false, type: 'basic', status: 404 } as Response;
+        expect(String(url)).toContain('/api/blog/posts');
+        return {
+          ok: true,
+          json: async () => ({
+            posts: [
+              { id: 1, title: 'Post 1', slug: 'post-1', featured_image_url: 'https://broken.com/missing.jpg' },
+              { id: 2, title: 'Post 2', slug: 'post-2', featured_image_url: 'https://ok.com/good.jpg' },
+            ],
+          }),
+        } as Response;
       }
-      return { ok: true, type: 'basic', status: 200 } as Response;
+      // Second call: HEAD for broken image -> 404
+      if (callCount === 2) {
+        return { ok: false, status: 404 } as Response;
+      }
+      // Third call: HEAD for good image -> 200
+      return { ok: true, status: 200 } as Response;
     });
-
-    const posts: PostMetadataForScan[] = [
-      {
-        id: 1,
-        title: 'Post 1',
-        slug: 'post-1',
-        featured_image_url: 'https://broken.com/missing.jpg',
-      },
-      {
-        id: 2,
-        title: 'Post 2',
-        slug: 'post-2',
-        featured_image_url: 'https://ok.com/good.jpg',
-      },
-    ];
 
     const { result } = renderHook(() => useBrokenImageScanner());
 
     await act(async () => {
-      await result.current.scan(posts);
+      await result.current.scan();
     });
 
     expect(result.current.scanning).toBe(false);
@@ -310,11 +305,16 @@ describe('useBrokenImageScanner', () => {
     expect(result.current.progress.total).toBe(2);
   });
 
-  it('should handle empty post list', async () => {
+  it('should handle empty published post list', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ posts: [] }),
+    } as unknown as Response);
+
     const { result } = renderHook(() => useBrokenImageScanner());
 
     await act(async () => {
-      await result.current.scan([]);
+      await result.current.scan();
     });
 
     expect(result.current.scanning).toBe(false);
@@ -322,21 +322,41 @@ describe('useBrokenImageScanner', () => {
     expect(result.current.progress).toEqual({ checked: 0, total: 0 });
   });
 
-  it('should reset results', async () => {
+  it('should set fetchError when API call fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
-      type: 'basic',
-      status: 404,
+      status: 401,
     } as Response);
-
-    const posts: PostMetadataForScan[] = [
-      { id: 1, title: 'Post 1', slug: 'p1', featured_image_url: 'https://x.com/img.jpg' },
-    ];
 
     const { result } = renderHook(() => useBrokenImageScanner());
 
     await act(async () => {
-      await result.current.scan(posts);
+      await result.current.scan();
+    });
+
+    expect(result.current.scanning).toBe(false);
+    expect(result.current.fetchError).toContain('Failed to fetch published posts');
+  });
+
+  it('should reset results and fetchError', async () => {
+    let callCount = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          ok: true,
+          json: async () => ({
+            posts: [{ id: 1, title: 'Post 1', slug: 'p1', featured_image_url: 'https://x.com/img.jpg' }],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: false, status: 404 } as Response;
+    });
+
+    const { result } = renderHook(() => useBrokenImageScanner());
+
+    await act(async () => {
+      await result.current.scan();
     });
 
     expect(result.current.results).toHaveLength(1);
@@ -347,5 +367,6 @@ describe('useBrokenImageScanner', () => {
 
     expect(result.current.results).toEqual([]);
     expect(result.current.progress).toEqual({ checked: 0, total: 0 });
+    expect(result.current.fetchError).toBeNull();
   });
 });

@@ -13,13 +13,7 @@
 import {
   useBrokenImageScanner,
   type BrokenImageResult,
-  type PostMetadataForScan,
 } from '@/hooks/useBrokenImageScanner';
-
-interface BlogHealthPanelProps {
-  /** Published posts to scan for broken images */
-  posts: PostMetadataForScan[];
-}
 
 /**
  * Format a status code or error type for display
@@ -38,12 +32,12 @@ function getStatusClass(status: number | 'timeout' | 'cors'): string {
   return 'bg-red-100 text-red-800';
 }
 
-export default function BlogHealthPanel({ posts }: BlogHealthPanelProps) {
-  const { scan, scanning, results, progress, reset } = useBrokenImageScanner();
+export default function BlogHealthPanel() {
+  const { scan, scanning, results, progress, reset, fetchError } = useBrokenImageScanner();
 
   const handleScan = () => {
     reset();
-    scan(posts);
+    scan();
   };
 
   const brokenResults = results.filter((r) => r.status !== 'cors');
@@ -116,8 +110,15 @@ export default function BlogHealthPanel({ posts }: BlogHealthPanelProps) {
         </div>
       )}
 
+      {/* Fetch error */}
+      {!scanning && fetchError && (
+        <p className="text-sm text-red-600" data-testid="scan-fetch-error">
+          {fetchError}
+        </p>
+      )}
+
       {/* No issues found */}
-      {!scanning && progress.total > 0 && results.length === 0 && (
+      {!scanning && progress.total > 0 && results.length === 0 && !fetchError && (
         <p className="text-sm text-green-600" data-testid="scan-success">
           All {progress.total} images are working correctly.
         </p>
