@@ -78,6 +78,12 @@ export function AltTextModal({
         return;
       }
 
+      if (trimmed.length > 200) {
+        setError('Alt text should be concise (max 200 characters)');
+        inputRef.current?.focus();
+        return;
+      }
+
       onConfirm(trimmed);
     },
     [altText, onConfirm]
@@ -152,16 +158,28 @@ export function AltTextModal({
               aria-invalid={!!error}
               data-testid="alt-text-input"
             />
-            {error && (
+            <div className="flex justify-between items-center mt-1">
+              <div className="flex-1">
+                {error && (
+                  <p
+                    id="alt-text-error"
+                    className="text-xs text-red-600"
+                    role="alert"
+                    data-testid="alt-text-error"
+                  >
+                    {error}
+                  </p>
+                )}
+              </div>
               <p
-                id="alt-text-error"
-                className="text-xs text-red-600 mt-1"
-                role="alert"
-                data-testid="alt-text-error"
+                className={`text-xs ${
+                  altText.length > 200 ? 'text-red-600' : 'text-gray-500'
+                }`}
+                data-testid="alt-text-char-count"
               >
-                {error}
+                {altText.length}/200
               </p>
-            )}
+            </div>
           </div>
 
           {/* Action Buttons */}

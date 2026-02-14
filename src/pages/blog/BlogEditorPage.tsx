@@ -146,6 +146,7 @@ export default function BlogEditorPage() {
   const [showAltTextModal, setShowAltTextModal] = useState(false);
   const [pendingImageFiles, setPendingImageFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropPositionRef = useRef<number | null>(null);
 
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
 
@@ -161,7 +162,16 @@ export default function BlogEditorPage() {
   } = useImageUpload(oracleBridgeUrl, (url, altText) => {
     // On upload complete, insert image into editor (Task 2.6)
     if (editor) {
-      editor.chain().focus().setImage({ src: url, alt: altText }).run();
+      // Use drop position if available (from drag-and-drop), otherwise use current cursor position
+      if (dropPositionRef.current !== null) {
+        editor.chain().insertContentAt(dropPositionRef.current, {
+          type: 'image',
+          attrs: { src: url, alt: altText },
+        }).run();
+        dropPositionRef.current = null; // Clear after use
+      } else {
+        editor.chain().focus().setImage({ src: url, alt: altText }).run();
+      }
     }
   });
 
@@ -262,6 +272,33 @@ export default function BlogEditorPage() {
           }
         }
         return false;
+      },
+      handleDOMEvents: {
+        drop: (view, event) => {
+          const hasFiles = event.dataTransfer?.files && event.dataTransfer.files.length > 0;
+          if (!hasFiles) return false;
+
+          const files = Array.from(event.dataTransfer.files);
+          const imageFiles = files.filter((f) => isValidImageType(f));
+
+          if (imageFiles.length > 0) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Calculate drop position using Tiptap's view.posAtCoords
+            const coords = { left: event.clientX, top: event.clientY };
+            const pos = view.posAtCoords(coords);
+            if (pos) {
+              dropPositionRef.current = pos.pos;
+            }
+
+            setPendingImageFiles(imageFiles);
+            setShowAltTextModal(true);
+            return true; // We handled the event
+          }
+
+          return false;
+        },
       },
     },
     onUpdate: () => {
@@ -526,40 +563,8 @@ export default function BlogEditorPage() {
     };
   }, [handleImageUploadClick]);
 
-  // Drag-and-drop handler (Task 2.4)
-  useEffect(() => {
-    if (!editor || !editor.view?.dom) return;
-
-    const editorElement = editor.view.dom;
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      if (!e.dataTransfer?.files?.length) return;
-
-      const files = Array.from(e.dataTransfer.files);
-      const imageFiles = files.filter((f) => isValidImageType(f));
-
-      if (imageFiles.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        setPendingImageFiles(imageFiles);
-        setShowAltTextModal(true);
-      }
-    };
-
-    editorElement.addEventListener('dragover', handleDragOver);
-    editorElement.addEventListener('drop', handleDrop);
-
-    return () => {
-      editorElement.removeEventListener('dragover', handleDragOver);
-      editorElement.removeEventListener('drop', handleDrop);
-    };
-  }, [editor]);
+  // Note: Drag-and-drop is now handled via editorProps.handleDOMEvents.drop (see useEditor config above)
+  // This approach uses view.posAtCoords() to track drop position instead of cursor position
 
   // Save draft handler (Task 7 + Task 19)
   const handleSaveDraft = useCallback(async () => {

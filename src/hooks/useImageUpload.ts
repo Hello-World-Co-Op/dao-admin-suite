@@ -113,7 +113,20 @@ export function useImageUpload(
       try {
         compressedFile = await compressImage(task.file);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Compression failed';
+        // Map known errors to user-friendly messages
+        let message = 'Unable to compress image';
+        if (error instanceof Error) {
+          const errorMsg = error.message.toLowerCase();
+          if (errorMsg.includes('out of memory') || errorMsg.includes('allocation')) {
+            message = 'Image is too large to process. Try a smaller file.';
+          } else if (errorMsg.includes('corrupt') || errorMsg.includes('invalid')) {
+            message = 'Image file appears to be corrupted or invalid.';
+          } else if (errorMsg.includes('unsupported') || errorMsg.includes('format')) {
+            message = 'Image format is not supported.';
+          } else {
+            message = `Compression failed: ${error.message}`;
+          }
+        }
         updateTask(task.id, { status: 'failed', error: message });
         setStatusMessage(`Failed to compress ${task.file.name}`);
         return null;

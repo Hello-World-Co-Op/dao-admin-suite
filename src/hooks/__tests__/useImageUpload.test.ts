@@ -176,7 +176,7 @@ describe('useImageUpload', () => {
     });
 
     expect(result.current.queue[0].status).toBe('failed');
-    expect(result.current.queue[0].error).toBe('Compression failed');
+    expect(result.current.queue[0].error).toBe('Compression failed: Compression failed');
   });
 
   it('removes tasks from queue', () => {
