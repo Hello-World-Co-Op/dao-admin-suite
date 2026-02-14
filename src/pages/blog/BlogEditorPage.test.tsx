@@ -76,6 +76,28 @@ vi.mock('@/hooks/useAdminAuth', () => ({
   }),
 }));
 
+// Mock useAutoSave to prevent timer side effects in existing tests
+const mockMarkDirty = vi.fn();
+const mockTriggerSave = vi.fn();
+vi.mock('@/hooks/useAutoSave', () => ({
+  useAutoSave: () => ({
+    markDirty: mockMarkDirty,
+    triggerSave: mockTriggerSave,
+    isDirty: false,
+  }),
+}));
+
+// Mock blogApi to prevent double-fetch in manual save tests
+vi.mock('@/utils/blogApi', () => ({
+  saveDraft: vi.fn(),
+}));
+
+// Mock recovery utilities
+vi.mock('@/utils/recovery', () => ({
+  checkForRecovery: vi.fn().mockReturnValue(null),
+  clearBackup: vi.fn(),
+}));
+
 // Mock window.prompt for link/image dialogs
 const mockPrompt = vi.fn();
 window.prompt = mockPrompt;
@@ -241,6 +263,7 @@ vi.mock('@/components/blog/SlashCommandMenu', () => ({
 // Import components after mocks
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SLASH_COMMANDS } from '@/components/blog/SlashCommandMenu';
+import { saveDraft as mockSaveDraftFn } from '@/utils/blogApi';
 
 // Helper to render BlogEditorPage at a specific route
 function renderEditor(path: string = '/blog/editor/new') {
@@ -768,17 +791,14 @@ describe('BlogEditorPage', () => {
             }),
           });
         }
-        if (url.includes('/api/blog/save-draft')) {
-          return Promise.resolve({
-            ok: false,
-            status: 409,
-            json: () => Promise.resolve({
-              error: 'Conflict',
-              message: 'This post was modified in another session. Reload to see latest changes.',
-            }),
-          });
-        }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      // Mock saveDraft to return StaleEdit
+      vi.mocked(mockSaveDraftFn).mockResolvedValue({
+        success: false,
+        error: 'StaleEdit',
+        message: 'This post was modified in another session. Reload to see latest changes.',
       });
 
       renderEditor('/blog/editor/my-post');
@@ -793,7 +813,7 @@ describe('BlogEditorPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
 
       await waitFor(() => {
-        expect(screen.getByTestId('stale-edit-banner')).toBeInTheDocument();
+        expect(screen.getByTestId('persistent-banner')).toBeInTheDocument();
       });
     });
   });

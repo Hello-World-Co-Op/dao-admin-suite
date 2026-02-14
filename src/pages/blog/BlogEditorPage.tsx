@@ -10,6 +10,11 @@
  * - Code block syntax highlighting with 4 pinned languages
  * - MetadataPanel with slug, excerpt, categories, tags, SEO preview (Story 3.3)
  * - Save via oracle-bridge to blog canister (Story 3.3)
+ * - Auto-save with trailing debounce (60s) + max-wait (5min) (Story 3.4)
+ * - Crash recovery via localStorage backup (Story 3.4)
+ * - Save status indicators with ARIA live regions (Story 3.4)
+ * - StaleEdit conflict detection and persistent banner (Story 3.4)
+ * - Inline re-auth prompt on session expiry (Story 3.4)
  *
  * Code-split via React.lazy() with Suspense fallback for LCP < 2.5s (NFR2).
  * Editor chunk must remain under 200KB gzip (NFR7).
@@ -18,6 +23,7 @@
  *
  * @see BL-008.3.2 - Blog Editor Core -- Rich-Text Editing and Formatting
  * @see BL-008.3.3 - Post Creation Form and Metadata Panel
+ * @see BL-008.3.4 - Auto-Save, Crash Recovery, and Save Indicators
  */
 
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
@@ -37,9 +43,17 @@ import { EditorBubbleMenu } from '@/components/blog/EditorBubbleMenu';
 import { SlashCommands } from '@/components/blog/SlashCommandMenu';
 import { TitleField } from '@/components/blog/TitleField';
 import { MetadataPanel } from '@/components/blog/MetadataPanel';
+import { SaveStatusIndicator } from '@/components/blog/SaveStatusIndicator';
+import { PersistentBanner } from '@/components/blog/PersistentBanner';
+import { RecoveryPrompt } from '@/components/blog/RecoveryPrompt';
+import { checkForRecovery, clearBackup } from '@/utils/recovery';
+import { InlineReAuthPrompt } from '@/components/blog/InlineReAuthPrompt';
+import { useAutoSave } from '@/hooks/useAutoSave';
+import type { SaveStatus } from '@/hooks/useAutoSave';
 import { generateSlug } from '@/utils/slug-generator';
 import { calculateReadingTime } from '@/utils/reading-time';
 import { generateAutoExcerpt } from '@/utils/auto-excerpt';
+import { saveDraft } from '@/utils/blogApi';
 
 // Register ONLY 4 languages (not common's 37 or all 190+) to minimize bundle size
 // highlight.js@11.11.1 pinned for marketing-suite visual parity (Story 5.2)
@@ -51,12 +65,6 @@ lowlight.register('bash', bashLang);
 
 /** Toast notification state */
 interface ToastState {
-  visible: boolean;
-  message: string;
-}
-
-/** Stale edit banner state */
-interface StaleEditState {
   visible: boolean;
   message: string;
 }
@@ -79,7 +87,6 @@ export default function BlogEditorPage() {
   const { id: postId } = useParams();
   const navigate = useNavigate();
   const [toast, setToast] = useState<ToastState>({ visible: false, message: '' });
-  const [staleEdit, setStaleEdit] = useState<StaleEditState>({ visible: false, message: '' });
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pasteCleanedRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,6 +105,15 @@ export default function BlogEditorPage() {
   const [currentPostId, setCurrentPostId] = useState<number | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number>(0);
   const [isPublished, setIsPublished] = useState(false);
+
+  // Auto-save state (Story 3.4)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | undefined>();
+  const [staleEditMessage, setStaleEditMessage] = useState<string>('');
+  const [showStaleEdit, setShowStaleEdit] = useState(false);
+  const [showReAuthPrompt, setShowReAuthPrompt] = useState(false);
+  const [showRecoveryPrompt, setShowRecoveryPrompt] = useState(false);
+  const [recoveryBody, setRecoveryBody] = useState<string>('');
 
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
 
@@ -176,6 +192,50 @@ export default function BlogEditorPage() {
     },
   });
 
+  // Auto-save hook (Story 3.4 - Task 1)
+  const { markDirty, triggerSave } = useAutoSave({
+    postId: currentPostId,
+    expectedUpdatedAt: updatedAt,
+    getContent: () => editor?.getHTML() || '',
+    saveFn: async (body, expectedUpdatedAtValue) => {
+      if (currentPostId === null) {
+        return { success: false, error: 'InternalError', message: 'No post ID' };
+      }
+      return saveDraft(oracleBridgeUrl, currentPostId, body, expectedUpdatedAtValue);
+    },
+    onSaveSuccess: (newUpdatedAt) => {
+      setUpdatedAt(newUpdatedAt);
+    },
+    onStatusChange: (status, message) => {
+      setSaveStatus(status);
+      setSaveMessage(message);
+
+      if (status === 'stale') {
+        setShowStaleEdit(true);
+        setStaleEditMessage(message || 'This post was modified in another session. Reload to see latest changes.');
+      }
+
+      if (status === 'unauthorized') {
+        setShowReAuthPrompt(true);
+      }
+    },
+    enabled: currentPostId !== null && !showStaleEdit,
+  });
+
+  // Hook into Tiptap onUpdate for auto-save dirty tracking (Task 1.2)
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleEditorUpdate = () => {
+      markDirty();
+    };
+
+    editor.on('update', handleEditorUpdate);
+    return () => {
+      editor.off('update', handleEditorUpdate);
+    };
+  }, [editor, markDirty]);
+
   // Debounced reading time and auto-excerpt update (Task 17)
   useEffect(() => {
     if (!editor) return;
@@ -200,7 +260,7 @@ export default function BlogEditorPage() {
     };
   }, [editor]);
 
-  // Load existing post on mount (Task 18)
+  // Load existing post on mount (Task 18) + crash recovery check (Task 4)
   useEffect(() => {
     if (!postId || postId === 'new') return;
 
@@ -231,6 +291,15 @@ export default function BlogEditorPage() {
         if (editor && post.body) {
           editor.commands.setContent(post.body);
         }
+
+        // Check for crash recovery (Story 3.4 - Task 4)
+        if (post.id) {
+          const recovery = checkForRecovery(post.id, post.updated_at);
+          if (recovery) {
+            setRecoveryBody(recovery.body);
+            setShowRecoveryPrompt(true);
+          }
+        }
       } catch (error) {
         console.error('[BlogEditor] Failed to load post:', error);
         showToast('Failed to load post');
@@ -242,6 +311,48 @@ export default function BlogEditorPage() {
 
     loadPost();
   }, [postId, oracleBridgeUrl, editor, navigate, showToast]);
+
+  // Handle recovery actions (Task 4.9, 4.10)
+  const handleRecover = useCallback(() => {
+    if (editor && recoveryBody) {
+      editor.commands.setContent(recoveryBody);
+    }
+    setShowRecoveryPrompt(false);
+    setRecoveryBody('');
+  }, [editor, recoveryBody]);
+
+  const handleDiscardRecovery = useCallback(() => {
+    if (currentPostId !== null) {
+      clearBackup(currentPostId);
+    }
+    setShowRecoveryPrompt(false);
+    setRecoveryBody('');
+  }, [currentPostId]);
+
+  // Handle re-auth (Task 5)
+  const handleReAuth = useCallback(() => {
+    // Open auth in a new window to preserve editor content
+    const authWindow = window.open('/login?reauth=true', '_blank', 'width=500,height=600');
+
+    // Poll for auth window close and retry save
+    const checkInterval = setInterval(() => {
+      if (authWindow?.closed) {
+        clearInterval(checkInterval);
+        setShowReAuthPrompt(false);
+        setSaveStatus('idle');
+        // Retry the save after re-auth
+        triggerSave();
+      }
+    }, 500);
+
+    // Clean up after 5 minutes max
+    setTimeout(() => clearInterval(checkInterval), 300_000);
+  }, [triggerSave]);
+
+  const handleDismissReAuth = useCallback(() => {
+    setShowReAuthPrompt(false);
+    setSaveStatus('idle');
+  }, []);
 
   // Handle title blur: auto-generate slug if empty (Task 6.5)
   const handleTitleBlur = useCallback(() => {
@@ -257,7 +368,7 @@ export default function BlogEditorPage() {
       showToast('Please enter a title before saving');
       return;
     }
-    if (staleEdit.visible) return; // Don't save if stale edit detected
+    if (showStaleEdit) return; // Don't save if stale edit detected
 
     setSaving(true);
     const body = editor.getHTML();
@@ -265,32 +376,19 @@ export default function BlogEditorPage() {
     try {
       if (currentPostId) {
         // Existing post: use save_draft (Task 19)
-        const response = await fetch(`${oracleBridgeUrl}/api/blog/save-draft`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            id: currentPostId,
-            body,
-            expected_updated_at: updatedAt,
-          }),
-        });
+        const result = await saveDraft(oracleBridgeUrl, currentPostId, body, updatedAt);
 
-        const data = await response.json();
-        if (!response.ok) {
-          if (response.status === 409 && data.message?.includes('modified in another session')) {
-            setStaleEdit({
-              visible: true,
-              message: data.message,
-            });
-          } else {
-            showToast(data.message || 'Failed to save draft');
-          }
-          return;
+        if (result.success && result.updated_at !== undefined) {
+          setUpdatedAt(result.updated_at);
+          showToast('Draft saved successfully');
+        } else if (result.error === 'StaleEdit') {
+          setShowStaleEdit(true);
+          setStaleEditMessage(result.message || 'This post was modified in another session. Reload to see latest changes.');
+        } else if (result.error === 'Unauthorized') {
+          setShowReAuthPrompt(true);
+        } else {
+          showToast(result.message || 'Failed to save draft');
         }
-
-        setUpdatedAt(data.updated_at);
-        showToast('Draft saved successfully');
       } else {
         // New post: use create_post (Task 7)
         const response = await fetch(`${oracleBridgeUrl}/api/blog/create`, {
@@ -308,9 +406,6 @@ export default function BlogEditorPage() {
 
         setCurrentPostId(data.id);
         showToast('Draft saved successfully');
-        // Update URL to edit mode using post ID (Task 7.6)
-        // The canister auto-generates slugs, but create_post only returns the
-        // numeric ID. Use ID for navigation; loadPost handles both IDs and slugs.
         navigate(`/blog/editor/${data.id}`, { replace: true });
       }
     } catch (error) {
@@ -319,7 +414,7 @@ export default function BlogEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [editor, title, slug, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, staleEdit.visible]);
+  }, [editor, title, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, showStaleEdit]);
 
   // Update metadata via canister (Task 20)
   const handleMetadataUpdate = useCallback(async () => {
@@ -346,7 +441,8 @@ export default function BlogEditorPage() {
         if (response.status === 409 && data.message?.includes('slug')) {
           setSlugError(data.message);
         } else if (response.status === 409) {
-          setStaleEdit({ visible: true, message: data.message });
+          setShowStaleEdit(true);
+          setStaleEditMessage(data.message);
         } else {
           showToast(data.message || 'Failed to update metadata');
         }
@@ -372,28 +468,25 @@ export default function BlogEditorPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4" data-testid="blog-editor-page">
-      {/* Stale Edit Banner (Task 19.4) */}
-      {staleEdit.visible && (
-        <div
-          className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center justify-between"
-          role="alert"
-          data-testid="stale-edit-banner"
-        >
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            <span className="text-sm text-yellow-800">{staleEdit.message}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="text-sm text-yellow-800 underline hover:text-yellow-900"
-          >
-            Reload
-          </button>
-        </div>
-      )}
+      {/* Persistent Banner for StaleEdit (Story 3.4 - AC4) */}
+      <PersistentBanner
+        visible={showStaleEdit}
+        message={staleEditMessage}
+      />
+
+      {/* Recovery Prompt for crash recovery (Story 3.4 - AC7) */}
+      <RecoveryPrompt
+        visible={showRecoveryPrompt}
+        onRecover={handleRecover}
+        onDiscard={handleDiscardRecovery}
+      />
+
+      {/* Inline Re-Auth Prompt (Story 3.4 - AC8) */}
+      <InlineReAuthPrompt
+        visible={showReAuthPrompt}
+        onReAuth={handleReAuth}
+        onDismiss={handleDismissReAuth}
+      />
 
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
@@ -404,13 +497,19 @@ export default function BlogEditorPage() {
           <p className="text-sm text-gray-500 mt-1">
             Use the toolbar, slash commands (/), or select text for formatting options.
           </p>
+          {/* Save Status Indicator (Story 3.4 - AC3, AC5) */}
+          <SaveStatusIndicator
+            status={saveStatus}
+            message={saveMessage}
+            onRetry={triggerSave}
+          />
         </div>
         <button
           type="button"
           onClick={handleSaveDraft}
-          disabled={saving || staleEdit.visible}
+          disabled={saving || showStaleEdit}
           className={`px-4 py-2 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-            saving || staleEdit.visible
+            saving || showStaleEdit
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700'
           }`}
