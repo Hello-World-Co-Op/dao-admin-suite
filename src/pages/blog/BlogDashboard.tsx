@@ -7,10 +7,13 @@
  * - Status filter tabs
  * - Post actions (Publish, Schedule, Archive)
  * - Pagination
+ * - Manual rebuild trigger and rebuild status display (Story 6.3)
+ * - Auto-rebuild on publish/archive (Story 6.3)
  *
  * Renders BlogDashboard for admin role, ContributorDashboard for author role.
  *
  * @see BL-008.3.5 Task 4 - BlogDashboard layout
+ * @see BL-008.6.3 - Admin Rebuild Trigger and Pipeline Integration
  * @see AC1 - Admin dashboard with sidebar and PostTable
  * @see AC3 - Contributor dashboard with simplified view
  */
@@ -22,9 +25,13 @@ import { PostTable, type BlogPost } from '@/components/blog/PostTable';
 import { StatusFilterTabs, filterPostsByTab, type FilterTab } from '@/components/blog/StatusFilterTabs';
 import { Pagination } from '@/components/blog/Pagination';
 import { ScheduleModal } from '@/components/blog/ScheduleModal';
+import { triggerRebuild, fetchRebuildStatus, type RebuildStatus } from '@/services/blog-rebuild-client';
 import ContributorDashboard from './ContributorDashboard';
 
 const PAGE_SIZE = 10;
+
+/** Rebuild status polling interval: 30 seconds */
+const REBUILD_STATUS_POLL_INTERVAL = 30_000;
 
 function getOracleBridgeUrl(): string {
   return import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
@@ -46,6 +53,30 @@ export default function BlogDashboard() {
   }
 
   return <AdminDashboard />;
+}
+
+/**
+ * Format an ISO 8601 timestamp as a human-readable relative time.
+ * Simple implementation to avoid adding date-fns dependency.
+ */
+function formatTimeAgo(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+
+  if (diffMs < 0) return 'just now';
+
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return 'just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 function AdminDashboard() {
@@ -81,6 +112,11 @@ function AdminDashboard() {
   // Sidebar collapsed state for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Rebuild status state (Story 6.3 - Task 1.5)
+  const [rebuildStatus, setRebuildStatus] = useState<RebuildStatus | null>(null);
+  const [rebuildLoading, setRebuildLoading] = useState(false);
+  const rebuildPollRef = useRef<number | null>(null);
+
   // Toast timeout ref to prevent memory leaks
   const toastTimeoutRef = useRef<number | null>(null);
 
@@ -105,6 +141,55 @@ function AdminDashboard() {
       }
     };
   }, []);
+
+  // Manual rebuild handler (Story 6.3 - Task 1.2, 1.3, 1.4)
+  const handleRebuildSite = useCallback(async () => {
+    if (rebuildLoading) return;
+    setRebuildLoading(true);
+
+    try {
+      const response = await fetch(`${oracleBridgeUrl}/api/webhooks/blog-rebuild`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.status === 202 || response.ok) {
+        showToast('Rebuild queued');
+      } else {
+        showToast('Failed to trigger rebuild', 'error');
+      }
+    } catch {
+      showToast('Failed to trigger rebuild', 'error');
+    } finally {
+      setRebuildLoading(false);
+    }
+  }, [oracleBridgeUrl, showToast, rebuildLoading]);
+
+  // Poll rebuild status (Story 6.3 - Task 1.8)
+  const pollRebuildStatus = useCallback(async () => {
+    try {
+      const status = await fetchRebuildStatus();
+      setRebuildStatus(status);
+    } catch {
+      // Silent failure - status display is non-critical
+      console.debug('[BlogDashboard] Failed to fetch rebuild status');
+    }
+  }, []);
+
+  useEffect(() => {
+    // Initial fetch
+    pollRebuildStatus();
+
+    // Poll every 30 seconds
+    rebuildPollRef.current = window.setInterval(pollRebuildStatus, REBUILD_STATUS_POLL_INTERVAL);
+
+    return () => {
+      if (rebuildPollRef.current) {
+        clearInterval(rebuildPollRef.current);
+      }
+    };
+  }, [pollRebuildStatus]);
 
   // Fetch posts
   const fetchPosts = useCallback(async () => {
@@ -180,6 +265,8 @@ function AdminDashboard() {
       }
 
       showToast('Post published successfully');
+      // Auto-trigger rebuild on publish (Story 6.3 - Task 2.1)
+      triggerRebuild();
       // Refresh posts to get updated timestamps from server
       await fetchPosts();
     } catch {
@@ -263,6 +350,8 @@ function AdminDashboard() {
       }
 
       showToast('Post archived');
+      // Auto-trigger rebuild on archive (Story 6.3 - Task 2.2)
+      triggerRebuild();
       // Refresh posts to get updated timestamps from server
       await fetchPosts();
     } catch {
@@ -349,15 +438,42 @@ function AdminDashboard() {
       <main className="flex-1 p-6 lg:p-8" data-testid="blog-main-content">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Blog Dashboard</h1>
-            <button
-              type="button"
-              onClick={() => navigate('/blog/editor/new')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              data-testid="new-post-button"
-            >
-              New Post
-            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Blog Dashboard</h1>
+              {/* Rebuild status display (Story 6.3 - Task 1.5) */}
+              <p className="text-sm text-gray-500 mt-1" data-testid="rebuild-status">
+                {rebuildStatus?.pending && 'Rebuild pending... '}
+                {rebuildStatus?.last_rebuild_at
+                  ? `Last rebuild: ${formatTimeAgo(rebuildStatus.last_rebuild_at)}`
+                  : 'Last rebuild: Never'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleRebuildSite}
+                disabled={rebuildLoading}
+                className={`px-4 py-2 border rounded-lg font-medium flex items-center gap-2 ${
+                  rebuildLoading
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+                data-testid="rebuild-site-button"
+              >
+                <svg className={`w-4 h-4 ${rebuildLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {rebuildLoading ? 'Rebuilding...' : 'Rebuild Site'}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/blog/editor/new')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                data-testid="new-post-button"
+              >
+                New Post
+              </button>
+            </div>
           </div>
 
           {/* Status filter tabs */}

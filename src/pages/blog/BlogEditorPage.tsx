@@ -71,6 +71,7 @@ import { saveDraft } from '@/utils/blogApi';
 import { findAutoOGCandidate } from '@/utils/ogImageUtils';
 import { mapBlogError } from '@/utils/blogErrorMapper';
 import type { BlogError } from '@/utils/blogErrorMapper';
+import { triggerRebuild } from '@/services/blog-rebuild-client';
 
 // Register ONLY 4 languages (not common's 37 or all 190+) to minimize bundle size
 // highlight.js@11.11.1 pinned for marketing-suite visual parity (Story 5.2)
@@ -586,6 +587,10 @@ export default function BlogEditorPage() {
         if (result.success && result.updated_at !== undefined) {
           setUpdatedAt(result.updated_at);
           showToast('Draft saved successfully');
+          // Auto-trigger rebuild if post is published (Story 6.3 - Task 2.3)
+          if (isPublished) {
+            triggerRebuild();
+          }
         } else if (result.error === 'StaleEdit') {
           handleBlogError({ variant: 'StaleEdit', message: result.message });
         } else if (result.error === 'Unauthorized') {
@@ -659,11 +664,15 @@ export default function BlogEditorPage() {
       setSlugError(null);
       setFieldErrors({});
       showToast('Metadata saved');
+      // Auto-trigger rebuild if post is published (Story 6.3 - Task 2.3)
+      if (isPublished) {
+        triggerRebuild();
+      }
     } catch (error) {
       console.error('[BlogEditor] Metadata update error:', error);
       handleBlogError({ variant: 'InternalError', message: 'Failed to save metadata. Please try again.' });
     }
-  }, [currentPostId, updatedAt, oracleBridgeUrl, title, slug, excerpt, categories, tags, ogImageUrl, showToast, handleBlogError]);
+  }, [currentPostId, updatedAt, oracleBridgeUrl, title, slug, excerpt, categories, tags, ogImageUrl, showToast, handleBlogError, isPublished]);
 
   if (loading) {
     return (
