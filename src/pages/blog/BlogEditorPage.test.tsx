@@ -252,12 +252,40 @@ vi.mock('@tiptap/suggestion', () => ({
 vi.mock('@/components/blog/SlashCommandMenu', () => ({
   SlashCommands: { name: 'slashCommands' },
   SLASH_COMMANDS: [
-    { title: 'Image', description: 'Insert an image', command: 'image', action: vi.fn() },
+    { title: 'Image', description: 'Upload an image', command: 'image', action: vi.fn() },
     { title: 'Code Block', description: 'Insert a code block', command: 'code', action: vi.fn() },
     { title: 'Quote', description: 'Insert a blockquote', command: 'quote', action: vi.fn() },
     { title: 'Horizontal Rule', description: 'Insert a horizontal divider', command: 'hr', action: vi.fn() },
   ],
   CommandList: () => <div data-testid="command-list">Command List</div>,
+  setSlashImageHandler: vi.fn(),
+}));
+
+// Mock useImageUpload hook to prevent side effects in existing tests
+vi.mock('@/hooks/useImageUpload', () => ({
+  useImageUpload: () => ({
+    queue: [],
+    isUploading: false,
+    addToQueue: vi.fn(),
+    processQueue: vi.fn(),
+    retryUpload: vi.fn(),
+    removeFromQueue: vi.fn(),
+    clearCompleted: vi.fn(),
+    completedCount: 0,
+    totalCount: 0,
+    statusMessage: '',
+  }),
+}));
+
+// Mock imageUtils
+vi.mock('@/utils/imageUtils', () => ({
+  isValidImageType: vi.fn().mockReturnValue(true),
+  compressImage: vi.fn(),
+  uploadWithTimeout: vi.fn(),
+  SUPPORTED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  MAX_IMAGE_WIDTH: 1200,
+  MAX_IMAGE_SIZE_MB: 2,
+  UPLOAD_TIMEOUT_MS: 30_000,
 }));
 
 // Import components after mocks

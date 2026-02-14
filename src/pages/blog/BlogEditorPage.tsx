@@ -18,6 +18,10 @@
  * - Post preview with blog typography (Story 3.6)
  * - OG image management with auto-detection (Story 3.6)
  * - BlogError -> UX feedback mapping (Story 3.6)
+ * - Client-side image compression, upload, and editor integration (Story 4.2)
+ * - Alt text modal for WCAG compliance (Story 4.2)
+ * - Sequential image upload queue with progress (Story 4.2)
+ * - Drag-and-drop image insertion (Story 4.2)
  *
  * Code-split via React.lazy() with Suspense fallback for LCP < 2.5s (NFR2).
  * Editor chunk must remain under 200KB gzip (NFR7).
@@ -28,6 +32,7 @@
  * @see BL-008.3.3 - Post Creation Form and Metadata Panel
  * @see BL-008.3.4 - Auto-Save, Crash Recovery, and Save Indicators
  * @see BL-008.3.6 - Post Preview and OG Image Management
+ * @see BL-008.4.2 - Client-Side Image Processing and Editor Integration
  */
 
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
@@ -44,17 +49,21 @@ import bashLang from 'highlight.js/lib/languages/bash';
 
 import { EditorToolbar } from '@/components/blog/EditorToolbar';
 import { EditorBubbleMenu } from '@/components/blog/EditorBubbleMenu';
-import { SlashCommands } from '@/components/blog/SlashCommandMenu';
+import { SlashCommands, setSlashImageHandler } from '@/components/blog/SlashCommandMenu';
 import { TitleField } from '@/components/blog/TitleField';
 import { MetadataPanel } from '@/components/blog/MetadataPanel';
 import { SaveStatusIndicator } from '@/components/blog/SaveStatusIndicator';
 import { PersistentBanner } from '@/components/blog/PersistentBanner';
 import { RecoveryPrompt } from '@/components/blog/RecoveryPrompt';
 import { BlogPreview } from '@/components/blog/BlogPreview';
+import { AltTextModal } from '@/components/blog/AltTextModal';
+import { ImageUploadProgress } from '@/components/blog/ImageUploadProgress';
 import { checkForRecovery, clearBackup } from '@/utils/recovery';
 import { InlineReAuthPrompt } from '@/components/blog/InlineReAuthPrompt';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import type { SaveStatus } from '@/hooks/useAutoSave';
+import { useImageUpload } from '@/hooks/useImageUpload';
+import { isValidImageType } from '@/utils/imageUtils';
 import { generateSlug } from '@/utils/slug-generator';
 import { calculateReadingTime } from '@/utils/reading-time';
 import { generateAutoExcerpt } from '@/utils/auto-excerpt';
@@ -133,7 +142,28 @@ export default function BlogEditorPage() {
   // Error state for inline field errors (Story 3.6 AC5)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Image upload state (Story 4.2)
+  const [showAltTextModal, setShowAltTextModal] = useState(false);
+  const [pendingImageFiles, setPendingImageFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
+
+  // Image upload hook (Story 4.2 - Task 2.1)
+  const {
+    queue: uploadQueue,
+    addToQueue: addToUploadQueue,
+    processQueue: processUploadQueue,
+    retryUpload,
+    removeFromQueue: removeFromUploadQueue,
+    clearCompleted: clearCompletedUploads,
+    statusMessage: uploadStatusMessage,
+  } = useImageUpload(oracleBridgeUrl, (url, altText) => {
+    // On upload complete, insert image into editor (Task 2.6)
+    if (editor) {
+      editor.chain().focus().setImage({ src: url, alt: altText }).run();
+    }
+  });
 
   // Show toast notification
   const showToast = useCallback((message: string) => {
@@ -439,6 +469,98 @@ export default function BlogEditorPage() {
     }
   }, [editor]);
 
+  // Image upload: open file picker (Story 4.2 - Task 2.2)
+  const handleImageUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Image upload: handle file selection from file picker (Task 2.2)
+  const handleImageFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const imageFiles = Array.from(files).filter(isValidImageType);
+    if (imageFiles.length === 0) {
+      showToast('Only JPEG, PNG, GIF, and WebP images are supported. SVG files are not allowed.');
+      return;
+    }
+
+    setPendingImageFiles(imageFiles);
+    setShowAltTextModal(true);
+
+    // Reset file input for re-selection
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [showToast]);
+
+  // Alt text confirmed: compress and upload (Task 2.5, 2.6)
+  const handleAltTextConfirm = useCallback((altText: string) => {
+    setShowAltTextModal(false);
+
+    if (pendingImageFiles.length > 0) {
+      // Create alt texts array - same text for all files in this batch
+      const altTexts = pendingImageFiles.map(() => altText);
+      addToUploadQueue(pendingImageFiles, altTexts);
+      setPendingImageFiles([]);
+
+      // Process the queue
+      processUploadQueue();
+    }
+  }, [pendingImageFiles, addToUploadQueue, processUploadQueue]);
+
+  // Alt text cancelled
+  const handleAltTextCancel = useCallback(() => {
+    setShowAltTextModal(false);
+    setPendingImageFiles([]);
+  }, []);
+
+  // Wire up slash command /image to use upload flow (Task 2.3)
+  useEffect(() => {
+    setSlashImageHandler(() => {
+      handleImageUploadClick();
+    });
+
+    return () => {
+      setSlashImageHandler(null);
+    };
+  }, [handleImageUploadClick]);
+
+  // Drag-and-drop handler (Task 2.4)
+  useEffect(() => {
+    if (!editor || !editor.view?.dom) return;
+
+    const editorElement = editor.view.dom;
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      if (!e.dataTransfer?.files?.length) return;
+
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter((f) => isValidImageType(f));
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        setPendingImageFiles(imageFiles);
+        setShowAltTextModal(true);
+      }
+    };
+
+    editorElement.addEventListener('dragover', handleDragOver);
+    editorElement.addEventListener('drop', handleDrop);
+
+    return () => {
+      editorElement.removeEventListener('dragover', handleDragOver);
+      editorElement.removeEventListener('drop', handleDrop);
+    };
+  }, [editor]);
+
   // Save draft handler (Task 7 + Task 19)
   const handleSaveDraft = useCallback(async () => {
     if (!editor) return;
@@ -662,10 +784,23 @@ export default function BlogEditorPage() {
 
           {/* Editor container */}
           <div className="border border-gray-300 rounded-lg overflow-hidden">
-            <EditorToolbar editor={editor} />
+            <EditorToolbar editor={editor} onImageUpload={handleImageUploadClick} />
             {editor && <EditorBubbleMenu editor={editor} />}
             <EditorContent editor={editor} />
           </div>
+
+          {/* Image Upload Progress (Story 4.2 - Task 3.3) */}
+          {uploadQueue.length > 0 && (
+            <div className="mt-3">
+              <ImageUploadProgress
+                queue={uploadQueue}
+                statusMessage={uploadStatusMessage}
+                onRetry={retryUpload}
+                onRemove={removeFromUploadQueue}
+                onClearCompleted={clearCompletedUploads}
+              />
+            </div>
+          )}
         </div>
 
         {/* Metadata Panel (Task 8 + 14) - sidebar on desktop, below on mobile */}
@@ -701,6 +836,26 @@ export default function BlogEditorPage() {
         title={title}
         htmlContent={editor?.getHTML() || ''}
         readingTime={readingTime}
+      />
+
+      {/* Alt Text Modal (Story 4.2 - Task 2.5) */}
+      <AltTextModal
+        visible={showAltTextModal}
+        imagePreviewUrl={pendingImageFiles[0] ? URL.createObjectURL(pendingImageFiles[0]) : undefined}
+        fileName={pendingImageFiles[0]?.name}
+        onConfirm={handleAltTextConfirm}
+        onCancel={handleAltTextCancel}
+      />
+
+      {/* Hidden file input for image upload (Story 4.2 - Task 2.2) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        multiple
+        onChange={handleImageFileSelect}
+        className="hidden"
+        data-testid="image-file-input"
       />
 
       {/* Toast notification */}

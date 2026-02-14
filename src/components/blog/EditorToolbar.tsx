@@ -46,6 +46,8 @@ function ToolbarButton({ onClick, isActive, disabled, children, ariaLabel }: Too
 
 interface EditorToolbarProps {
   editor: Editor | null;
+  /** Called when the image toolbar button is clicked (opens file picker + alt text flow) */
+  onImageUpload?: () => void;
 }
 
 /**
@@ -56,7 +58,7 @@ interface EditorToolbarProps {
  *
  * Language selector appears when cursor is inside a code block.
  */
-export function EditorToolbar({ editor }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
   const [overflowOpen, setOverflowOpen] = useState(false);
 
   const toggleOverflow = useCallback(() => {
@@ -82,9 +84,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   };
 
   const handleAddImage = () => {
-    const url = window.prompt('Enter image URL:');
-    if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
+    if (onImageUpload) {
+      onImageUpload();
+    } else {
+      // Fallback to prompt if no upload handler provided
+      const url = window.prompt('Enter image URL:');
+      if (url) {
+        editor.chain().focus().setImage({ src: url }).run();
+      }
     }
   };
 

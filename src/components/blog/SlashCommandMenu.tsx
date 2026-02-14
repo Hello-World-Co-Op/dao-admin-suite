@@ -38,18 +38,37 @@ export interface SlashCommandItem {
   action: (editor: Editor, range: Range) => void;
 }
 
+/**
+ * External handler for image upload via slash command.
+ * Set this before creating the editor to wire up the image upload flow.
+ */
+let _externalImageHandler: ((editor: Editor, range: Range) => void) | null = null;
+
+/**
+ * Set the external image upload handler for the /image slash command.
+ * Called from BlogEditorPage to inject the alt text modal + upload flow.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function setSlashImageHandler(handler: ((editor: Editor, range: Range) => void) | null): void {
+  _externalImageHandler = handler;
+}
+
 /** Slash commands available in V1 */
 // eslint-disable-next-line react-refresh/only-export-components
 export const SLASH_COMMANDS: SlashCommandItem[] = [
   {
     title: 'Image',
-    description: 'Insert an image',
+    description: 'Upload an image',
     command: 'image',
     action: (editor, range) => {
       editor.chain().focus().deleteRange(range).run();
-      const url = window.prompt('Enter image URL:');
-      if (url) {
-        editor.chain().focus().setImage({ src: url }).run();
+      if (_externalImageHandler) {
+        _externalImageHandler(editor, range);
+      } else {
+        const url = window.prompt('Enter image URL:');
+        if (url) {
+          editor.chain().focus().setImage({ src: url }).run();
+        }
       }
     },
   },
