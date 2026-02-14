@@ -36,6 +36,9 @@ const EditorSpike = lazy(() => import('@/pages/blog/EditorSpike'));
 // Editor chunk must remain under 200KB gzip (NFR7)
 const BlogEditorPage = lazy(() => import('@/pages/blog/BlogEditorPage'));
 
+// Blog dashboard (BL-008.3.5) - admin dashboard or contributor dashboard based on role
+const BlogDashboard = lazy(() => import('@/pages/blog/BlogDashboard'));
+
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
   return (
@@ -62,6 +65,16 @@ export default function App() {
 
               {/* Spike: Tiptap editor validation (BL-008.3.1) - temporary, no auth required */}
               <Route path="/blog/spike-editor" element={<EditorSpike />} />
+
+              {/* Blog dashboard - requires authentication + author or admin role (BL-008.3.5) */}
+              <Route
+                path="/blog"
+                element={
+                  <ProtectedRoute>
+                    <BlogDashboard />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Blog editor routes - require authentication + admin role (BL-008.3.2) */}
               {/* TODO: Add 'author' role support when author RBAC is implemented */}

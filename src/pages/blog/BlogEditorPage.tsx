@@ -504,19 +504,42 @@ export default function BlogEditorPage() {
             onRetry={triggerSave}
           />
         </div>
-        <button
-          type="button"
-          onClick={handleSaveDraft}
-          disabled={saving || showStaleEdit}
-          className={`px-4 py-2 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-            saving || showStaleEdit
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-          aria-label="Save draft"
-        >
-          {saving ? 'Saving...' : 'Save Draft'}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Ready for Review toggle (BL-008.3.5 Task 12 - tag-based convention) */}
+          {currentPostId && !isPublished && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer" data-testid="ready-for-review-label">
+              <input
+                type="checkbox"
+                checked={tags.includes('ready_for_review')}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    if (!tags.includes('ready_for_review')) {
+                      setTags([...tags, 'ready_for_review']);
+                    }
+                  } else {
+                    setTags(tags.filter((t) => t !== 'ready_for_review'));
+                  }
+                }}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                data-testid="ready-for-review-checkbox"
+              />
+              Ready for Review
+            </label>
+          )}
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={saving || showStaleEdit}
+            className={`px-4 py-2 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              saving || showStaleEdit
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+            aria-label="Save draft"
+          >
+            {saving ? 'Saving...' : 'Save Draft'}
+          </button>
+        </div>
       </div>
 
       {/* Main content area: editor + metadata panel */}
