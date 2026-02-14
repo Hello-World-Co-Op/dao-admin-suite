@@ -15,7 +15,7 @@
  * @see AC3 - Contributor dashboard with simplified view
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRoles } from '@hello-world-co-op/auth';
 import { PostTable, type BlogPost } from '@/components/blog/PostTable';
@@ -38,8 +38,6 @@ interface ToastState {
 
 export default function BlogDashboard() {
   const { roles } = useRoles();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = roles.includes('admin');
 
   // If not admin, show ContributorDashboard
@@ -83,9 +81,29 @@ function AdminDashboard() {
   // Sidebar collapsed state for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Toast timeout ref to prevent memory leaks
+  const toastTimeoutRef = useRef<number | null>(null);
+
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    // Clear any existing timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
     setToast({ visible: true, message, type });
-    setTimeout(() => setToast({ visible: false, message: '', type: 'success' }), 5000);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast({ visible: false, message: '', type: 'success' });
+      toastTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Fetch posts
@@ -162,16 +180,14 @@ function AdminDashboard() {
       }
 
       showToast('Post published successfully');
-      // Update local state
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, status: 'Published' as const } : p)),
-      );
+      // Refresh posts to get updated timestamps from server
+      await fetchPosts();
     } catch {
       showToast('Failed to publish post', 'error');
     } finally {
       setActionLoading(false);
     }
-  }, [oracleBridgeUrl, showToast, actionLoading]);
+  }, [oracleBridgeUrl, showToast, actionLoading, fetchPosts]);
 
   // Schedule action
   const handleScheduleClick = useCallback((postId: number) => {
@@ -181,15 +197,17 @@ function AdminDashboard() {
 
   const handleScheduleConfirm = useCallback(async (dateTimeStr: string) => {
     if (!schedulePostId || actionLoading) return;
+
+    // Validate date BEFORE setting actionLoading
+    const parsedMs = Date.parse(dateTimeStr);
+    if (isNaN(parsedMs)) {
+      showToast('Invalid date format', 'error');
+      return;
+    }
+
     setActionLoading(true);
 
     try {
-      // Convert to IC nanoseconds (Date.parse returns milliseconds)
-      const parsedMs = Date.parse(dateTimeStr);
-      if (isNaN(parsedMs)) {
-        showToast('Invalid date format', 'error');
-        return;
-      }
       const scheduledAtNanos = BigInt(parsedMs) * 1_000_000n;
 
       const response = await fetch(`${oracleBridgeUrl}/api/blog/schedule`, {
@@ -209,9 +227,8 @@ function AdminDashboard() {
       }
 
       showToast(`Post scheduled for ${new Date(dateTimeStr).toLocaleString()}`);
-      setPosts((prev) =>
-        prev.map((p) => (p.id === schedulePostId ? { ...p, status: 'Scheduled' as const } : p)),
-      );
+      // Refresh posts to get updated timestamps from server
+      await fetchPosts();
     } catch (error) {
       console.error('[BlogDashboard] Schedule error:', error);
       showToast('Failed to schedule post', 'error');
@@ -220,7 +237,7 @@ function AdminDashboard() {
       setScheduleModalVisible(false);
       setSchedulePostId(null);
     }
-  }, [oracleBridgeUrl, schedulePostId, showToast, actionLoading]);
+  }, [oracleBridgeUrl, schedulePostId, showToast, actionLoading, fetchPosts]);
 
   // Archive action
   const handleArchiveClick = useCallback((postId: number) => {
@@ -246,16 +263,15 @@ function AdminDashboard() {
       }
 
       showToast('Post archived');
-      setPosts((prev) =>
-        prev.map((p) => (p.id === archiveConfirmId ? { ...p, status: 'Archived' as const } : p)),
-      );
+      // Refresh posts to get updated timestamps from server
+      await fetchPosts();
     } catch {
       showToast('Failed to archive post', 'error');
     } finally {
       setActionLoading(false);
       setArchiveConfirmId(null);
     }
-  }, [oracleBridgeUrl, archiveConfirmId, showToast, actionLoading]);
+  }, [oracleBridgeUrl, archiveConfirmId, showToast, actionLoading, fetchPosts]);
 
   // Tab change handler
   const handleTabChange = useCallback((tab: FilterTab) => {

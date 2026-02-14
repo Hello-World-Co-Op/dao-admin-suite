@@ -8,7 +8,7 @@
  * @see AC5 - Schedule post action
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 interface ScheduleModalProps {
   visible: boolean;
@@ -35,6 +35,20 @@ export function ScheduleModal({ visible, onSchedule, onCancel }: ScheduleModalPr
     setError(null);
     onSchedule(dateTime);
   }, [dateTime, onSchedule]);
+
+  // Close modal with Escape key
+  useEffect(() => {
+    if (!visible) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [visible, onCancel]);
 
   if (!visible) return null;
 

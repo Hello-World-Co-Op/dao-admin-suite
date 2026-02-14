@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { StatusFilterTabs, filterPostsByTab, type FilterTab } from './StatusFilterTabs';
+import { StatusFilterTabs, filterPostsByTab } from './StatusFilterTabs';
 import type { BlogPost } from './PostTable';
 
 const mockPosts: BlogPost[] = [

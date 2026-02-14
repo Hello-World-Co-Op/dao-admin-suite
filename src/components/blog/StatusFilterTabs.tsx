@@ -34,6 +34,8 @@ function getTabCount(posts: BlogPost[], tab: FilterTab): number {
   return posts.filter((p) => p.status === tab).length;
 }
 
+// Exported for use in BlogDashboard component
+// eslint-disable-next-line react-refresh/only-export-components
 export function filterPostsByTab(posts: BlogPost[], tab: FilterTab): BlogPost[] {
   if (tab === 'all') return posts;
   if (tab === 'ready_for_review') return posts.filter((p) => p.tags.includes('ready_for_review'));
