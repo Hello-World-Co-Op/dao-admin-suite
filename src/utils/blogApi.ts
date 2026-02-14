@@ -139,16 +139,17 @@ export async function fetchReadinessData(): Promise<ReadinessData> {
     throw new Error('Failed to fetch posts for readiness check');
   }
 
+  if (!categoriesRes.ok) {
+    throw new Error('Failed to fetch categories for readiness check');
+  }
+
   const postsData = await postsRes.json();
   const posts = postsData.posts || [];
   const publishedCount = posts.filter(
     (p: { status: string }) => p.status === 'Published',
   ).length;
 
-  let categories: Array<{ name: string; slug: string; post_count: number }> = [];
-  if (categoriesRes.ok) {
-    categories = await categoriesRes.json();
-  }
+  const categories = await categoriesRes.json();
 
   return {
     publishedPostCount: publishedCount,
