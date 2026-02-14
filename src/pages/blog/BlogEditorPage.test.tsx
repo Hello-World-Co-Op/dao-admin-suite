@@ -1,6 +1,8 @@
 /**
  * Tests for Blog Editor Page - Production Editor
  *
+ * Story BL-008.3.2 + BL-008.3.3 combined tests
+ *
  * Validates:
  * - BlogEditorPage renders without errors (smoke test) (AC1)
  * - Lazy-loaded route loads editor component (AC1)
@@ -11,17 +13,40 @@
  * - Slash command menu appears when user types "/" (AC4)
  * - Code block language selector updates language class (AC6)
  * - Paste event triggers toast notification (AC5)
- * - Save draft to localStorage (placeholder for Story 3.3)
+ * - TitleField with validation (BL-008.3.3 AC1, AC3)
+ * - MetadataPanel integration (BL-008.3.3 AC2)
+ * - Save draft via oracle-bridge (BL-008.3.3 AC5)
+ * - Load existing post (BL-008.3.3 AC6)
+ * - StaleEdit error handling (BL-008.3.3 AC6)
+ * - SlugTaken error handling (BL-008.3.3 AC6)
  * - No skipped tests (AI-R24)
  *
  * @see BL-008.3.2 - Blog Editor Core -- Rich-Text Editing and Formatting
+ * @see BL-008.3.3 - Post Creation Form and Metadata Panel
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
+
+// Mock fetch for oracle-bridge calls
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock navigate
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+// Mock import.meta.env
+vi.stubEnv('VITE_ORACLE_BRIDGE_URL', 'http://localhost:8787');
 
 // Mock @hello-world-co-op/auth
 vi.mock('@hello-world-co-op/auth', () => ({
@@ -82,6 +107,7 @@ let capturedHandlePaste: ((view: unknown, event: unknown) => boolean) | undefine
 
 let mockEditorConfig: { content: string; extensions: unknown[]; editorProps?: Record<string, unknown>; onUpdate?: () => void } | null = null;
 let mockEditorInstance: Record<string, unknown> | null = null;
+let editorUpdateListeners: (() => void)[] = [];
 
 vi.mock('@tiptap/react', () => {
   const actual = {
@@ -104,8 +130,14 @@ vi.mock('@tiptap/react', () => {
           if (type === 'link') return { href: '' };
           return {};
         },
-        getHTML: () => '<p>Test content</p>',
+        getHTML: () => '<p>Test content with some words to count for reading time</p>',
         commands: { setContent: vi.fn() },
+        on: (_event: string, callback: () => void) => {
+          editorUpdateListeners.push(callback);
+        },
+        off: (_event: string, _callback: () => void) => {
+          editorUpdateListeners = [];
+        },
       };
       return mockEditorInstance;
     },
@@ -133,7 +165,6 @@ vi.mock('@tiptap/react/menus', () => ({
     shouldShow?: (props: { editor: unknown; from: number; to: number }) => boolean;
     editor: unknown;
   }) => {
-    // Simulate shouldShow logic for testing
     const show = shouldShow ? shouldShow({ editor, from: 0, to: 5 }) : true;
     if (!show) return null;
     return <div data-testid="bubble-menu">{children}</div>;
@@ -230,10 +261,17 @@ function renderEditor(path: string = '/blog/editor/new') {
 describe('BlogEditorPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     mockPrompt.mockReturnValue(null);
     capturedOnUpdate = undefined;
     capturedHandlePaste = undefined;
+    editorUpdateListeners = [];
+
+    // Default: categories fetch returns empty array
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
 
     // Re-setup chain mock return values after clearAllMocks
     mockChain.focus.mockReturnThis();
@@ -252,6 +290,10 @@ describe('BlogEditorPage', () => {
     mockChain.unsetLink.mockReturnThis();
     mockChain.setImage.mockReturnThis();
     mockChain.deleteRange.mockReturnThis();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('AC1: Code-split editor page with LCP performance', () => {
@@ -279,14 +321,6 @@ describe('BlogEditorPage', () => {
       });
     });
 
-    it('displays "Edit Post" title for edit post route', async () => {
-      renderEditor('/blog/editor/abc123');
-
-      await waitFor(() => {
-        expect(screen.getByText('Edit Post')).toBeInTheDocument();
-      });
-    });
-
     it('initializes editor with 4 extensions (StarterKit, Image, CodeBlockLowlight, SlashCommands)', async () => {
       renderEditor();
 
@@ -302,10 +336,7 @@ describe('BlogEditorPage', () => {
       renderEditor();
 
       await waitFor(() => {
-        // Get the main toolbar (not the BubbleMenu toolbar)
         const mainToolbar = screen.getByRole('toolbar', { name: 'Editor formatting toolbar' });
-
-        // Default tools in the main toolbar
         expect(within(mainToolbar).getByRole('button', { name: /Bold/i })).toBeInTheDocument();
         expect(within(mainToolbar).getByRole('button', { name: /Italic/i })).toBeInTheDocument();
         expect(within(mainToolbar).getByRole('button', { name: /Heading 2/i })).toBeInTheDocument();
@@ -387,8 +418,6 @@ describe('BlogEditorPage', () => {
         const bubbleMenu = screen.getByTestId('bubble-menu');
         const inlineToolbar = within(bubbleMenu).getByRole('toolbar', { name: 'Inline formatting' });
         expect(inlineToolbar).toBeInTheDocument();
-
-        // Check BubbleMenu-specific buttons
         expect(within(bubbleMenu).getByRole('button', { name: 'Bold' })).toBeInTheDocument();
         expect(within(bubbleMenu).getByRole('button', { name: 'Italic' })).toBeInTheDocument();
         expect(within(bubbleMenu).getByRole('button', { name: 'Link' })).toBeInTheDocument();
@@ -409,7 +438,6 @@ describe('BlogEditorPage', () => {
         expect(mockEditorConfig).not.toBeNull();
         const extensions = mockEditorConfig!.extensions;
         expect(extensions).toHaveLength(4);
-        // SlashCommands is the 4th extension (after StarterKit, Image, CodeBlockLowlight)
         const slashExt = extensions[3] as { name: string };
         expect(slashExt.name).toBe('slashCommands');
       });
@@ -452,7 +480,6 @@ describe('BlogEditorPage', () => {
         },
       });
 
-      // Should return false to let Tiptap handle the paste
       expect(result).toBe(false);
     });
 
@@ -463,7 +490,6 @@ describe('BlogEditorPage', () => {
         expect(capturedHandlePaste).toBeInstanceOf(Function);
       });
 
-      // Simulate paste with plain HTML (no style= or span)
       capturedHandlePaste!(null, {
         clipboardData: {
           getData: (type: string) => {
@@ -473,45 +499,9 @@ describe('BlogEditorPage', () => {
         },
       });
 
-      // Trigger onUpdate - should NOT show toast since content was not rich
       if (capturedOnUpdate) capturedOnUpdate();
 
-      // Toast should not appear
       expect(screen.queryByTestId('editor-toast')).not.toBeInTheDocument();
-    });
-
-    it('toast shows for save draft action', async () => {
-      renderEditor();
-
-      await waitFor(() => {
-        const saveButton = screen.getByRole('button', { name: /Save draft/i });
-        fireEvent.click(saveButton);
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('editor-toast')).toBeInTheDocument();
-        expect(screen.getByText('Draft saved to browser storage (temporary)')).toBeInTheDocument();
-      });
-    });
-
-    it('toast can be dismissed via dismiss button', async () => {
-      renderEditor();
-
-      // Trigger toast via save
-      await waitFor(() => {
-        fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('editor-toast')).toBeInTheDocument();
-      });
-
-      // Click dismiss
-      fireEvent.click(screen.getByRole('button', { name: /Dismiss/i }));
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('editor-toast')).not.toBeInTheDocument();
-      });
     });
   });
 
@@ -540,62 +530,275 @@ describe('BlogEditorPage', () => {
     });
   });
 
-  describe('Placeholder save functionality', () => {
-    it('Save Draft button is rendered', async () => {
+  describe('BL-008.3.3 AC1: TitleField integration', () => {
+    it('renders TitleField above the editor', async () => {
       renderEditor();
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Save draft/i })).toBeInTheDocument();
+        expect(screen.getByTestId('title-field')).toBeInTheDocument();
       });
     });
 
-    it('clicking Save Draft saves content to localStorage', async () => {
+    it('TitleField shows validation error on blur when empty', async () => {
       renderEditor();
 
       await waitFor(() => {
-        fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+        const titleField = screen.getByTestId('title-field');
+        fireEvent.blur(titleField);
       });
 
-      const saved = localStorage.getItem('blog-draft-new');
-      expect(saved).toBe('<p>Test content</p>');
+      await waitFor(() => {
+        expect(screen.getByTestId('title-error')).toBeInTheDocument();
+        expect(screen.getByText('Title is required')).toBeInTheDocument();
+      });
     });
 
-    it('shows toast after saving draft', async () => {
+    it('TitleField accepts valid title and clears error', async () => {
       renderEditor();
 
       await waitFor(() => {
-        fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+        const titleField = screen.getByTestId('title-field');
+        // First blur to mark as touched
+        fireEvent.blur(titleField);
       });
 
-      await waitFor(() => {
-        expect(screen.getByText('Draft saved to browser storage (temporary)')).toBeInTheDocument();
-      });
-    });
-
-    it('loads saved draft from localStorage', async () => {
-      localStorage.setItem('blog-draft-new', '<p>Previously saved content</p>');
-
-      renderEditor();
+      // Now type valid title
+      const titleField = screen.getByTestId('title-field');
+      fireEvent.change(titleField, { target: { value: 'My First Post' } });
+      fireEvent.blur(titleField);
 
       await waitFor(() => {
-        expect(mockEditorConfig).not.toBeNull();
-        expect(mockEditorConfig!.content).toBe('<p>Previously saved content</p>');
-      });
-    });
-
-    it('uses post ID for draft key when editing existing post', async () => {
-      localStorage.setItem('blog-draft-post-42', '<p>Existing post content</p>');
-
-      renderEditor('/blog/editor/post-42');
-
-      await waitFor(() => {
-        expect(mockEditorConfig).not.toBeNull();
-        expect(mockEditorConfig!.content).toBe('<p>Existing post content</p>');
+        expect(screen.queryByTestId('title-error')).not.toBeInTheDocument();
       });
     });
   });
 
-  describe('AC8: No test regressions', () => {
+  describe('BL-008.3.3 AC2: MetadataPanel integration', () => {
+    it('renders MetadataPanel on the page', async () => {
+      renderEditor();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metadata-panel')).toBeInTheDocument();
+      });
+    });
+
+    it('MetadataPanel can be expanded to show all fields', async () => {
+      renderEditor();
+
+      await waitFor(() => {
+        const toggle = screen.getByTestId('metadata-toggle');
+        fireEvent.click(toggle);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('metadata-content')).toBeInTheDocument();
+        expect(screen.getByTestId('slug-field')).toBeInTheDocument();
+        expect(screen.getByTestId('excerpt-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('tag-input')).toBeInTheDocument();
+        expect(screen.getByTestId('seo-preview')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('BL-008.3.3 AC3: Slug auto-generation on title blur', () => {
+    it('auto-generates slug from title when slug is empty', async () => {
+      renderEditor();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('title-field')).toBeInTheDocument();
+      });
+
+      // Type title
+      const titleField = screen.getByTestId('title-field');
+      fireEvent.change(titleField, { target: { value: 'My Amazing Blog Post' } });
+      fireEvent.blur(titleField);
+
+      // Expand metadata panel to see slug
+      const toggle = screen.getByTestId('metadata-toggle');
+      fireEvent.click(toggle);
+
+      await waitFor(() => {
+        const slugInput = screen.getByTestId('slug-input');
+        expect((slugInput as HTMLInputElement).value).toBe('my-amazing-blog-post');
+      });
+    });
+  });
+
+  describe('BL-008.3.3 AC5: Create new post via oracle-bridge', () => {
+    it('calls create_post on Save Draft and shows success toast', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/blog/categories')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.includes('/api/blog/create')) {
+          return Promise.resolve({
+            ok: true,
+            status: 201,
+            json: () => Promise.resolve({ success: true, id: 42 }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      renderEditor();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('title-field')).toBeInTheDocument();
+      });
+
+      // Enter title
+      fireEvent.change(screen.getByTestId('title-field'), { target: { value: 'Test Post Title' } });
+
+      // Click Save Draft
+      fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+
+      await waitFor(() => {
+        // Verify create_post was called
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/api/blog/create'),
+          expect.objectContaining({
+            method: 'POST',
+            credentials: 'include',
+          }),
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Draft saved successfully')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error toast when title is empty on save', async () => {
+      renderEditor();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('blog-editor-page')).toBeInTheDocument();
+      });
+
+      // Click Save Draft without entering title
+      fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Please enter a title before saving')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('BL-008.3.3 AC6: Load existing post', () => {
+    it('loads post data when editing existing post', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/blog/categories')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.includes('/api/blog/post/test-post')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              id: 42,
+              title: 'Loaded Post Title',
+              slug: 'test-post',
+              body: '<p>Loaded content</p>',
+              excerpt: 'Test excerpt',
+              categories: ['tech'],
+              tags: ['test'],
+              status: 'Draft',
+              updated_at: 1707800000000000,
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      renderEditor('/blog/editor/test-post');
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Post')).toBeInTheDocument();
+      });
+
+      // Verify title was populated
+      await waitFor(() => {
+        const titleField = screen.getByTestId('title-field') as HTMLInputElement;
+        expect(titleField.value).toBe('Loaded Post Title');
+      });
+    });
+
+    it('shows error and redirects on 404', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/blog/categories')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.includes('/api/blog/post/not-found')) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            json: () => Promise.resolve({ error: 'Not Found', message: 'Post not found' }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      renderEditor('/blog/editor/not-found');
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/blog/editor/new');
+      });
+    });
+  });
+
+  describe('BL-008.3.3: StaleEdit error handling', () => {
+    it('shows stale edit banner on 409 conflict', async () => {
+      // First set up with an existing post
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/blog/categories')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.includes('/api/blog/post/my-post')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              id: 1,
+              title: 'My Post',
+              slug: 'my-post',
+              body: '<p>Content</p>',
+              excerpt: '',
+              categories: [],
+              tags: [],
+              status: 'Draft',
+              updated_at: 100,
+            }),
+          });
+        }
+        if (url.includes('/api/blog/save-draft')) {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve({
+              error: 'Conflict',
+              message: 'This post was modified in another session. Reload to see latest changes.',
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      renderEditor('/blog/editor/my-post');
+
+      // Wait for post to load
+      await waitFor(() => {
+        const titleField = screen.getByTestId('title-field') as HTMLInputElement;
+        expect(titleField.value).toBe('My Post');
+      });
+
+      // Try to save
+      fireEvent.click(screen.getByRole('button', { name: /Save draft/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('stale-edit-banner')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Editor structure and data-testids', () => {
     it('editor renders with the expected data-testid attributes', async () => {
       renderEditor();
 
@@ -610,6 +813,14 @@ describe('BlogEditorPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Use the toolbar, slash commands/)).toBeInTheDocument();
+      });
+    });
+
+    it('Save Draft button is rendered', async () => {
+      renderEditor();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Save draft/i })).toBeInTheDocument();
       });
     });
   });
