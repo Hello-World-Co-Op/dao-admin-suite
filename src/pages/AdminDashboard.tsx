@@ -1,6 +1,23 @@
 import { Link } from 'react-router-dom';
 import { SuiteSwitcher } from '@hello-world-co-op/ui';
 
+async function handleLogout() {
+  const oracleUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL;
+  if (oracleUrl) {
+    try {
+      await fetch(`${oracleUrl}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Best-effort — continue with redirect
+    }
+  }
+  localStorage.removeItem('user_data');
+  const founderyUrl = import.meta.env.VITE_FOUNDERY_OS_URL || 'https://staging-foundery.helloworlddao.com';
+  window.location.href = `${founderyUrl}/login`;
+}
+
 /**
  * Admin Dashboard Page
  *
@@ -73,15 +90,26 @@ export default function AdminDashboard() {
                 Hello World DAO administration and oversight tools
               </p>
             </div>
-            <SuiteSwitcher
-              currentSuite="admin"
-              suiteUrls={{
-                portal: import.meta.env.VITE_DAO_FRONTEND_URL,
-                founderyOs: import.meta.env.VITE_FOUNDERY_OS_URL,
-                governance: import.meta.env.VITE_GOVERNANCE_SUITE_URL,
-                otterCamp: import.meta.env.VITE_OTTER_CAMP_URL,
-              }}
-            />
+            <div className="flex items-center gap-3">
+              <SuiteSwitcher
+                currentSuite="admin"
+                suiteUrls={{
+                  portal: import.meta.env.VITE_DAO_FRONTEND_URL,
+                  founderyOs: import.meta.env.VITE_FOUNDERY_OS_URL,
+                  governance: import.meta.env.VITE_GOVERNANCE_SUITE_URL,
+                  otterCamp: import.meta.env.VITE_OTTER_CAMP_URL,
+                }}
+              />
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
