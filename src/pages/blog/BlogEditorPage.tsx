@@ -625,7 +625,7 @@ export default function BlogEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [editor, title, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, showStaleEdit, handleBlogError]);
+  }, [editor, title, currentPostId, updatedAt, oracleBridgeUrl, navigate, showToast, showStaleEdit, handleBlogError, isPublished]);
 
   // Update metadata via canister (Task 20)
   const handleMetadataUpdate = useCallback(async () => {

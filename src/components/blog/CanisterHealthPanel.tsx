@@ -24,6 +24,7 @@ function formatStorageMB(bytes: number): string {
 /**
  * Get color class for storage indicator based on NFR33 thresholds
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getStorageColor(bytes: number): 'green' | 'yellow' | 'red' {
   if (bytes > 75_000_000) return 'red';
   if (bytes > 50_000_000) return 'yellow';

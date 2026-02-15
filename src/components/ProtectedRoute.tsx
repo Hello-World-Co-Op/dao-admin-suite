@@ -46,6 +46,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // E2E bypass: skip RoleGuard when auth bypass is active (no AuthProvider roles in CI)
+  if (import.meta.env.VITE_E2E_AUTH_BYPASS === 'true') {
+    return <>{children}</>;
+  }
+
   // RoleGuard checks admin role via AuthProvider context (AC1, AC4, AC5, AC6)
   // DEV-only console logging is handled in UnauthorizedWithLogging fallback (AC7)
   return (

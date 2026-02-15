@@ -31,7 +31,7 @@ function KYCReviewPage() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey, _setRefreshKey] = useState(0);
 
   /**
    * Handle case selection from dashboard
