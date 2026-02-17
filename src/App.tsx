@@ -49,6 +49,10 @@ function PageLoader() {
 
 export default function App() {
   const oracleBridgeUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL || undefined;
+  // redirectBehavior="external" is used (not the two-hop /login-page approach recommended in Dev Notes)
+  // because it is equivalent in behavior and simpler: unauthenticated users go directly to FounderyOS
+  // login with returnUrl=<full admin URL>, bypassing the local /login route. The local /login route
+  // (LoginRedirect) still exists for direct URL access. See BL-029.3 Dev Notes for the two-hop alternative.
   const founderyOsLoginUrl = `${import.meta.env.VITE_FOUNDERY_OS_URL || 'http://127.0.0.1:5174'}/login`;
 
   return (

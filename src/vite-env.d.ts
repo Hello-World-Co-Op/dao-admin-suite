@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_IDENTITY_GATEWAY_CANISTER_ID: string;
   readonly VITE_ORACLE_BRIDGE_URL: string;
   readonly VITE_FOUNDERY_OS_URL: string;
+  readonly VITE_DAO_FRONTEND_URL: string;
   readonly VITE_DEV_AUTH_BYPASS: string;
   readonly VITE_E2E_AUTH_BYPASS: string;
 }
