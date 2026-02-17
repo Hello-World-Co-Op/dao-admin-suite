@@ -58,7 +58,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
-        <AuthProvider config={{ apiBaseUrl: oracleBridgeUrl }}>
+        <AuthProvider config={{ apiBaseUrl: oracleBridgeUrl, e2eBypass: import.meta.env.VITE_E2E_AUTH_BYPASS === 'true', devBypass: import.meta.env.VITE_DEV_AUTH_BYPASS === 'true' }}>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               {/* Login redirect - no authentication required (handles redirect to FounderyOS) */}
