@@ -8,13 +8,13 @@
  */
 
 import { ShieldX } from 'lucide-react';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { useAuth } from '@hello-world-co-op/auth';
 
 export default function Unauthorized() {
   const portalUrl =
     import.meta.env.VITE_DAO_FRONTEND_URL || 'https://portal.helloworlddao.com';
 
-  const { logout } = useAdminAuth();
+  const { logout } = useAuth();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

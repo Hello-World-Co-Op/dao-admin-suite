@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@dfinity/principal": "^3.4.3",
-    "@hello-world-co-op/auth": "^0.2.0",
+    "@hello-world-co-op/auth": "^0.3.0",
     "@hello-world-co-op/ui": "^0.3.1",
     "@tiptap/extension-code-block-lowlight": "^3.19.0",
     "@tiptap/extension-image": "^3.19.0",

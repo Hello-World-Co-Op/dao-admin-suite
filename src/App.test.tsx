@@ -4,6 +4,7 @@
  * Tests for the root application component including routing,
  * lazy loading, and error boundary integration.
  *
+ * @see BL-029.3 - Migrate dao-admin-suite to shared auth components
  * @see FAS-7.1 - DAO Admin Suite extraction
  * @see BL-007.4 - Integrate AdminGuard in dao-admin-suite
  */
@@ -57,12 +58,6 @@ vi.mock('@/pages/ContentModeration', () => ({
   },
 }));
 
-vi.mock('@/pages/LoginRedirect', () => ({
-  default: function MockLoginRedirect() {
-    return <div data-testid="login-redirect">Login Redirect</div>;
-  },
-}));
-
 vi.mock('@/pages/Unauthorized', () => ({
   default: function MockUnauthorized() {
     return <div data-testid="unauthorized">Unauthorized</div>;
@@ -84,21 +79,13 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-// Mock the useAdminAuth hook to simulate authenticated state
-vi.mock('@/hooks/useAdminAuth', () => ({
-  useAdminAuth: () => ({
-    isAuthenticated: true,
-    isLoading: false,
-    userId: 'test-admin',
-    logout: vi.fn(),
-  }),
-}));
-
-// Mock @hello-world-co-op/auth - RoleGuard passes children through (admin user scenario)
+// Mock @hello-world-co-op/auth - ProtectedRoute and LoginRedirect pass through in tests (admin user scenario)
 // AuthProvider is a simple passthrough wrapper in tests
 vi.mock('@hello-world-co-op/auth', () => ({
   RoleGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ProtectedRoute: ({ children }: { children: ReactNode }) => <>{children}</>,
+  LoginRedirect: () => <div data-testid="login-redirect">Login Redirect</div>,
   useAuth: () => ({
     isAuthenticated: true,
     isLoading: false,
@@ -110,11 +97,14 @@ vi.mock('@hello-world-co-op/auth', () => ({
     logout: vi.fn(),
     refresh: vi.fn(),
     error: null,
+    displayName: null,
+    icPrincipal: null,
+    membershipStatus: null,
   }),
 }));
 
-// Import ProtectedRoute after mocks are set up
-import { ProtectedRoute } from '@/components/ProtectedRoute';
+// Import shared components after mocks are set up
+import { ProtectedRoute, LoginRedirect } from '@hello-world-co-op/auth';
 
 // Lazy imports matching App.tsx
 const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
@@ -124,7 +114,6 @@ const GovernanceOversight = lazy(() => import('@/pages/GovernanceOversight'));
 const TreasuryManagement = lazy(() => import('@/pages/TreasuryManagement'));
 const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
-const LoginRedirect = lazy(() => import('@/pages/LoginRedirect'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
 /**

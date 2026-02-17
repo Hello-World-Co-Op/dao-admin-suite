@@ -4,18 +4,18 @@
  * Wraps the router with ErrorBoundary and AuthProvider for consistent
  * error handling and role-based access control.
  * Uses route-based code splitting for optimal performance.
- * ALL admin routes require authentication (ProtectedRoute) and admin role (RoleGuard).
+ * ALL admin routes require authentication + admin role via shared ProtectedRoute.
  * The /unauthorized route is accessible to authenticated non-admin users.
  *
+ * @see BL-029.3 - Migrate dao-admin-suite to shared auth components
  * @see BL-007.4 - Integrate AdminGuard in dao-admin-suite
  * @see FAS-7.1 - Create and Deploy dao-admin-suite
  */
 
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider, RoleGuard } from '@hello-world-co-op/auth';
+import { AuthProvider, ProtectedRoute, LoginRedirect } from '@hello-world-co-op/auth';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 // Route-based code splitting - each page loads on demand
 const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
@@ -25,7 +25,6 @@ const GovernanceOversight = lazy(() => import('@/pages/GovernanceOversight'));
 const TreasuryManagement = lazy(() => import('@/pages/TreasuryManagement'));
 const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
-const LoginRedirect = lazy(() => import('@/pages/LoginRedirect'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
 // Spike: Tiptap editor feasibility validation (BL-008.3.1)
@@ -50,6 +49,7 @@ function PageLoader() {
 
 export default function App() {
   const oracleBridgeUrl = import.meta.env.VITE_ORACLE_BRIDGE_URL || undefined;
+  const founderyOsLoginUrl = `${import.meta.env.VITE_FOUNDERY_OS_URL || 'http://127.0.0.1:5174'}/login`;
 
   return (
     <BrowserRouter>
@@ -58,7 +58,7 @@ export default function App() {
           <Suspense fallback={<PageLoader />}>
             <Routes>
               {/* Login redirect - no authentication required (handles redirect to FounderyOS) */}
-              <Route path="/login" element={<LoginRedirect />} />
+              <Route path="/login" element={<LoginRedirect loginUrl={founderyOsLoginUrl} />} />
 
               {/* Unauthorized page - accessible to authenticated non-admin users (AC2) */}
               <Route path="/unauthorized" element={<Unauthorized />} />
@@ -66,47 +66,58 @@ export default function App() {
               {/* Spike: Tiptap editor validation (BL-008.3.1) - temporary, no auth required */}
               <Route path="/blog/spike-editor" element={<EditorSpike />} />
 
-              {/* Blog dashboard - requires authentication + author or admin role (BL-008.3.5) */}
+              {/* Blog dashboard - requires authentication + admin role (BL-008.3.5) */}
               <Route
                 path="/blog"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute
+                    requiredRole="admin"
+                    unauthorizedComponent={<Unauthorized />}
+                    loginUrl={founderyOsLoginUrl}
+                    redirectBehavior="external"
+                  >
                     <BlogDashboard />
                   </ProtectedRoute>
                 }
               />
 
               {/* Blog editor routes - require authentication + admin role (BL-008.3.2) */}
-              {/* TODO: Add 'author' role support when author RBAC is implemented */}
+              {/* TODO: Add 'author' role support when non-admin author RBAC is implemented */}
               <Route
                 path="/blog/editor/new"
                 element={
-                  <ProtectedRoute>
-                    <RoleGuard requiredRole="admin">
-                      <BlogEditorPage />
-                    </RoleGuard>
+                  <ProtectedRoute
+                    requiredRole="admin"
+                    unauthorizedComponent={<Unauthorized />}
+                    loginUrl={founderyOsLoginUrl}
+                    redirectBehavior="external"
+                  >
+                    <BlogEditorPage />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="/blog/editor/:id"
                 element={
-                  <ProtectedRoute>
-                    <RoleGuard requiredRole="admin">
-                      <BlogEditorPage />
-                    </RoleGuard>
+                  <ProtectedRoute
+                    requiredRole="admin"
+                    unauthorizedComponent={<Unauthorized />}
+                    loginUrl={founderyOsLoginUrl}
+                    redirectBehavior="external"
+                  >
+                    <BlogEditorPage />
                   </ProtectedRoute>
                 }
               />
 
-              {/* All admin routes require authentication + admin role via ProtectedRoute */}
-              <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/kyc" element={<ProtectedRoute><KYCManagement /></ProtectedRoute>} />
-              <Route path="/members" element={<ProtectedRoute><MemberManagement /></ProtectedRoute>} />
-              <Route path="/governance" element={<ProtectedRoute><GovernanceOversight /></ProtectedRoute>} />
-              <Route path="/treasury" element={<ProtectedRoute><TreasuryManagement /></ProtectedRoute>} />
-              <Route path="/monitoring" element={<ProtectedRoute><SystemMonitoring /></ProtectedRoute>} />
-              <Route path="/moderation" element={<ProtectedRoute><ContentModeration /></ProtectedRoute>} />
+              {/* All admin routes require authentication + admin role via shared ProtectedRoute */}
+              <Route path="/" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/kyc" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><KYCManagement /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><MemberManagement /></ProtectedRoute>} />
+              <Route path="/governance" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><GovernanceOversight /></ProtectedRoute>} />
+              <Route path="/treasury" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><TreasuryManagement /></ProtectedRoute>} />
+              <Route path="/monitoring" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><SystemMonitoring /></ProtectedRoute>} />
+              <Route path="/moderation" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><ContentModeration /></ProtectedRoute>} />
             </Routes>
           </Suspense>
         </AuthProvider>

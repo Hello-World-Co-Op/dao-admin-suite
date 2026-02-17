@@ -52,6 +52,8 @@ vi.stubEnv('VITE_ORACLE_BRIDGE_URL', 'http://localhost:8787');
 vi.mock('@hello-world-co-op/auth', () => ({
   RoleGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ProtectedRoute: ({ children }: { children: ReactNode }) => <>{children}</>,
+  LoginRedirect: () => <div data-testid="login-redirect">Login Redirect</div>,
   useAuth: () => ({
     isAuthenticated: true,
     isLoading: false,
@@ -63,16 +65,9 @@ vi.mock('@hello-world-co-op/auth', () => ({
     logout: vi.fn(),
     refresh: vi.fn(),
     error: null,
-  }),
-}));
-
-// Mock useAdminAuth
-vi.mock('@/hooks/useAdminAuth', () => ({
-  useAdminAuth: () => ({
-    isAuthenticated: true,
-    isLoading: false,
-    userId: 'test-author',
-    logout: vi.fn(),
+    displayName: null,
+    icPrincipal: null,
+    membershipStatus: null,
   }),
 }));
 
@@ -289,7 +284,7 @@ vi.mock('@/utils/imageUtils', () => ({
 }));
 
 // Import components after mocks
-import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ProtectedRoute } from '@hello-world-co-op/auth';
 import { SLASH_COMMANDS } from '@/components/blog/SlashCommandMenu';
 import { saveDraft as mockSaveDraftFn } from '@/utils/blogApi';
 

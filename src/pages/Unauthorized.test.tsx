@@ -4,6 +4,7 @@
  * Tests for the unauthorized access page displayed to authenticated
  * users who lack admin role.
  *
+ * @see BL-029.3 - Migrate dao-admin-suite to shared auth components
  * @see BL-007.4 AC2 - Non-admin users see /unauthorized page
  */
 
@@ -14,13 +15,22 @@ import { MemoryRouter } from 'react-router-dom';
 
 const mockLogout = vi.fn();
 
-// Mock useAdminAuth to provide logout
-vi.mock('@/hooks/useAdminAuth', () => ({
-  useAdminAuth: () => ({
+// Mock @hello-world-co-op/auth to provide logout via useAuth
+vi.mock('@hello-world-co-op/auth', () => ({
+  useAuth: () => ({
     isAuthenticated: true,
     isLoading: false,
-    userId: 'test-user',
+    user: { userId: 'test-user', email: 'test@test.com', providers: [], roles: [] },
+    roles: [],
+    hasRole: () => false,
+    isAdmin: false,
+    login: vi.fn(),
     logout: mockLogout,
+    refresh: vi.fn(),
+    error: null,
+    displayName: null,
+    icPrincipal: null,
+    membershipStatus: null,
   }),
 }));
 
