@@ -42,9 +42,10 @@ export function RoleAssignConfirmModal({
       data-testid="role-confirm-modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="role-confirm-dialog-title"
     >
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
+        <h2 id="role-confirm-dialog-title" className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
         <p className="text-gray-600 mb-4">{body}</p>
 
         {/* Session logout warning (AC12) */}

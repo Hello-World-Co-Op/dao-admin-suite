@@ -23,7 +23,6 @@ const ROLE_COLORS: Record<string, string> = {
 
 interface UserRoleTableProps {
   users: UserWithRoles[];
-  currentUserId: string;
   loading: boolean;
   onManageRoles: (user: UserWithRoles) => void;
   selectedUserId?: string;

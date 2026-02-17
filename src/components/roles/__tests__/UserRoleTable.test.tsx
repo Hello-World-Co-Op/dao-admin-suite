@@ -43,7 +43,6 @@ describe('UserRoleTable', () => {
 
   const defaultProps = {
     users: mockUsers,
-    currentUserId: 'user-1',
     loading: false,
     onManageRoles: vi.fn(),
   };

@@ -38,12 +38,17 @@ export default function RoleManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
 
-  const fetchUsers = useCallback(async (fetchPage: number, search: string) => {
+  const fetchUsers = useCallback(async (fetchPage: number, search: string, syncSelectedUserId?: string) => {
     try {
       setLoading(true);
       setError(null);
       const result = await listUsers(fetchPage, PAGE_SIZE, search || undefined);
       setUsersData(result);
+      // Sync selectedUser with fresh data so panel doesn't show stale roles
+      if (syncSelectedUserId) {
+        const fresh = result.users.find((u) => u.user_id === syncSelectedUserId);
+        if (fresh) setSelectedUser(fresh);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
@@ -78,9 +83,10 @@ export default function RoleManagement() {
   }, []);
 
   const handleRoleChange = useCallback(() => {
-    // Re-fetch current page to refresh roles in table
-    fetchUsers(page, searchQuery);
-  }, [fetchUsers, page, searchQuery]);
+    // Re-fetch current page to refresh roles in table.
+    // Pass selectedUser's id so fetchUsers can sync the open panel's user prop.
+    fetchUsers(page, searchQuery, selectedUser?.user_id);
+  }, [fetchUsers, page, searchQuery, selectedUser?.user_id]);
 
   const handleRetry = useCallback(() => {
     fetchUsers(page, searchQuery);
@@ -170,7 +176,6 @@ export default function RoleManagement() {
               <>
                 <UserRoleTable
                   users={users}
-                  currentUserId={currentUserId}
                   loading={loading}
                   onManageRoles={handleManageRoles}
                   selectedUserId={selectedUser?.user_id}

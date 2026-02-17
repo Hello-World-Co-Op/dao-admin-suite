@@ -56,7 +56,9 @@ export function RoleAuditLog({ active }: RoleAuditLogProps) {
     }
   }, [limit]);
 
-  // Polling when active (AC9: auto-refresh every 30 seconds)
+  // Polling when active (AC9: auto-refresh every 30 seconds).
+  // fetchAuditLog is included in deps so polling restarts when limit changes
+  // (e.g., after Load More), ensuring the interval always uses the current limit.
   useEffect(() => {
     if (!active) return;
 
@@ -68,8 +70,7 @@ export function RoleAuditLog({ active }: RoleAuditLogProps) {
     }, 30_000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, fetchAuditLog]);
 
   const handleLoadMore = useCallback(() => {
     const newLimit = limit + 50;

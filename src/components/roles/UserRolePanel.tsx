@@ -17,7 +17,7 @@
  * @see AC12 - Session logout warning banner
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { getUserRoles, assignRole, revokeRole } from '@/services/roles-client';
 import { RoleAssignConfirmModal } from './RoleAssignConfirmModal';
 import type { UserWithRoles } from '@/services/roles-client';
@@ -49,13 +49,22 @@ export function UserRolePanel({ user, currentUserId, onClose, onRoleChange }: Us
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup toast timer on unmount to prevent state update on unmounted component
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const availableRoles = ASSIGNABLE_ROLES.filter((r) => !currentRoles.includes(r));
   const isSelfAdmin = currentUserId === user.user_id;
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ visible: true, message, type });
-    setTimeout(() => setToast(null), 5000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000);
   }, []);
 
   const refreshRoles = useCallback(async () => {
