@@ -27,6 +27,9 @@ const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 
+// Role Management page (BL-019.2) - admin-only role assignment and audit
+const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
+
 // Spike: Tiptap editor feasibility validation (BL-008.3.1)
 // This is a temporary experimental route - not for production use
 const EditorSpike = lazy(() => import('@/pages/blog/EditorSpike'));
@@ -122,6 +125,19 @@ export default function App() {
               <Route path="/treasury" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><TreasuryManagement /></ProtectedRoute>} />
               <Route path="/monitoring" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><SystemMonitoring /></ProtectedRoute>} />
               <Route path="/moderation" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><ContentModeration /></ProtectedRoute>} />
+              <Route
+                path="/roles"
+                element={
+                  <ProtectedRoute
+                    requiredRole="admin"
+                    unauthorizedComponent={<Unauthorized />}
+                    loginUrl={founderyOsLoginUrl}
+                    redirectBehavior="external"
+                  >
+                    <RoleManagement />
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
           </Suspense>
         </AuthProvider>

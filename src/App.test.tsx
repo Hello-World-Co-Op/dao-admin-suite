@@ -58,6 +58,12 @@ vi.mock('@/pages/ContentModeration', () => ({
   },
 }));
 
+vi.mock('@/pages/RoleManagement', () => ({
+  default: function MockRoleManagement() {
+    return <div data-testid="role-management">Role Management</div>;
+  },
+}));
+
 vi.mock('@/pages/Unauthorized', () => ({
   default: function MockUnauthorized() {
     return <div data-testid="unauthorized">Unauthorized</div>;
@@ -115,6 +121,7 @@ const TreasuryManagement = lazy(() => import('@/pages/TreasuryManagement'));
 const SystemMonitoring = lazy(() => import('@/pages/SystemMonitoring'));
 const ContentModeration = lazy(() => import('@/pages/ContentModeration'));
 const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
+const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 
 /**
  * Helper to render App routes with MemoryRouter at a specific path
@@ -133,6 +140,7 @@ function renderAtPath(path: string) {
           <Route path="/treasury" element={<ProtectedRoute><TreasuryManagement /></ProtectedRoute>} />
           <Route path="/monitoring" element={<ProtectedRoute><SystemMonitoring /></ProtectedRoute>} />
           <Route path="/moderation" element={<ProtectedRoute><ContentModeration /></ProtectedRoute>} />
+          <Route path="/roles" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
         </Routes>
       </Suspense>
     </MemoryRouter>
@@ -205,6 +213,14 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('content-moderation')).toBeInTheDocument();
+    });
+  });
+
+  it('should render role management on /roles route', async () => {
+    renderAtPath('/roles');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('role-management')).toBeInTheDocument();
     });
   });
 

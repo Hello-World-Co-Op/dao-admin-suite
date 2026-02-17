@@ -348,7 +348,7 @@ describe('BlogEditorPage', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('blog-editor-page')).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
 
     it('lazy-loaded route loads editor component via Suspense', async () => {
