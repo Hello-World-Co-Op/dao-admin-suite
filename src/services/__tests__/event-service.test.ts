@@ -14,6 +14,7 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  validateRrule,
   EventApiError,
 } from '../event-service';
 
@@ -197,6 +198,70 @@ describe('event-service', () => {
         await deleteEvent('missing-id');
       } catch (e) {
         expect((e as EventApiError).status).toBe(404);
+      }
+    });
+  });
+
+  describe('validateRrule', () => {
+    it('sends POST with rrule, dtstart, and count', async () => {
+      const mockResponse = {
+        valid: true,
+        next_occurrences: [
+          '2026-03-17T14:00:00Z',
+          '2026-03-24T14:00:00Z',
+          '2026-03-31T14:00:00Z',
+        ],
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
+
+      const result = await validateRrule('FREQ=WEEKLY;BYDAY=TU', '2026-03-15T14:00:00', 3);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://oracle.test/api/events/validate-rrule',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            rrule: 'FREQ=WEEKLY;BYDAY=TU',
+            dtstart: '2026-03-15T14:00:00',
+            count: 3,
+          }),
+        },
+      );
+      expect(result).toEqual(mockResponse);
+    });
+
+    it('defaults count to 5', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ valid: true, next_occurrences: [] }),
+      });
+
+      await validateRrule('FREQ=DAILY', '2026-03-15T14:00:00');
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.count).toBe(5);
+    });
+
+    it('throws EventApiError on 400 invalid rrule', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Invalid RRULE syntax' }),
+      });
+
+      await expect(
+        validateRrule('BAD_RRULE', '2026-03-15T14:00:00'),
+      ).rejects.toThrow(EventApiError);
+
+      try {
+        await validateRrule('BAD_RRULE', '2026-03-15T14:00:00');
+      } catch (e) {
+        expect((e as EventApiError).status).toBe(400);
       }
     });
   });

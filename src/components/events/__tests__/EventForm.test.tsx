@@ -17,6 +17,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { EventForm } from '../EventForm';
 import type { EventItem } from '@/services/event-service';
+import * as eventService from '@/services/event-service';
 
 vi.mock('@hello-world-co-op/auth', () => ({
   useAuth: () => ({
@@ -364,5 +365,182 @@ describe('EventForm', () => {
 
     fireEvent.click(screen.getByTestId('event-cancel-btn'));
     expect(mockOnCancel).toHaveBeenCalled();
+  });
+
+  // AI-R118: RRULE Preview tests
+  describe('RRULE Preview (AI-R118)', () => {
+    it('shows "Preview recurrence" button when recurring is toggled on', () => {
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      // Toggle recurring on
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      expect(screen.getByTestId('rrule-preview-btn')).toBeInTheDocument();
+    });
+
+    it('preview button is disabled when recurrence rule is empty', () => {
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      expect(screen.getByTestId('rrule-preview-btn')).toBeDisabled();
+    });
+
+    it('calls validateRrule and displays next occurrences on success', async () => {
+      const mockValidate = vi.spyOn(eventService, 'validateRrule').mockResolvedValue({
+        valid: true,
+        next_occurrences: [
+          '2026-03-17T14:00:00Z',
+          '2026-03-24T14:00:00Z',
+          '2026-03-31T14:00:00Z',
+          '2026-04-07T14:00:00Z',
+          '2026-04-14T14:00:00Z',
+        ],
+      });
+
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      // Set start date/time
+      fireEvent.change(screen.getByTestId('event-start-date-input'), {
+        target: { value: '2026-03-15' },
+      });
+      fireEvent.change(screen.getByTestId('event-start-time-input'), {
+        target: { value: '14:00' },
+      });
+
+      // Toggle recurring on and fill RRULE
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      fireEvent.change(screen.getByTestId('event-recurrence-rule-input'), {
+        target: { value: 'FREQ=WEEKLY;BYDAY=TU' },
+      });
+
+      // Click preview button
+      fireEvent.click(screen.getByTestId('rrule-preview-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rrule-preview-dates')).toBeInTheDocument();
+      });
+
+      expect(mockValidate).toHaveBeenCalledWith(
+        'FREQ=WEEKLY;BYDAY=TU',
+        '2026-03-15T14:00:00',
+        5,
+      );
+
+      // Should display "Next 5 occurrences:" header
+      expect(screen.getByText('Next 5 occurrences:')).toBeInTheDocument();
+
+      mockValidate.mockRestore();
+    });
+
+    it('shows error when validateRrule returns invalid', async () => {
+      const mockValidate = vi.spyOn(eventService, 'validateRrule').mockResolvedValue({
+        valid: false,
+        next_occurrences: [],
+        error: 'Invalid RRULE: unknown frequency',
+      });
+
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      fireEvent.change(screen.getByTestId('event-recurrence-rule-input'), {
+        target: { value: 'FREQ=BAD' },
+      });
+      fireEvent.click(screen.getByTestId('rrule-preview-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rrule-preview-error')).toHaveTextContent(
+          'Invalid RRULE: unknown frequency',
+        );
+      });
+
+      expect(screen.queryByTestId('rrule-preview-dates')).not.toBeInTheDocument();
+
+      mockValidate.mockRestore();
+    });
+
+    it('shows error when validateRrule throws', async () => {
+      const mockValidate = vi.spyOn(eventService, 'validateRrule').mockRejectedValue(
+        new Error('Network error'),
+      );
+
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      fireEvent.change(screen.getByTestId('event-recurrence-rule-input'), {
+        target: { value: 'FREQ=WEEKLY' },
+      });
+      fireEvent.click(screen.getByTestId('rrule-preview-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rrule-preview-error')).toHaveTextContent(
+          'Network error',
+        );
+      });
+
+      mockValidate.mockRestore();
+    });
+
+    it('clears preview when recurrence rule text changes', async () => {
+      const mockValidate = vi.spyOn(eventService, 'validateRrule').mockResolvedValue({
+        valid: true,
+        next_occurrences: ['2026-03-17T14:00:00Z'],
+      });
+
+      render(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          isSubmitting={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('event-is-recurring-checkbox'));
+      fireEvent.change(screen.getByTestId('event-recurrence-rule-input'), {
+        target: { value: 'FREQ=WEEKLY' },
+      });
+      fireEvent.click(screen.getByTestId('rrule-preview-btn'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('rrule-preview-dates')).toBeInTheDocument();
+      });
+
+      // Change the RRULE - preview should clear
+      fireEvent.change(screen.getByTestId('event-recurrence-rule-input'), {
+        target: { value: 'FREQ=DAILY' },
+      });
+
+      expect(screen.queryByTestId('rrule-preview-dates')).not.toBeInTheDocument();
+
+      mockValidate.mockRestore();
+    });
   });
 });

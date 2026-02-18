@@ -81,6 +81,49 @@ function getOracleBridgeUrl(): string {
   return import.meta.env.VITE_ORACLE_BRIDGE_URL || '';
 }
 
+// --- RRULE Validation ---
+
+export interface ValidateRruleResponse {
+  valid: boolean;
+  next_occurrences: string[]; // ISO date strings
+  error?: string;
+}
+
+/**
+ * Validate an RRULE string and return the next N occurrence dates.
+ *
+ * POST /api/events/validate-rrule
+ *
+ * @param rrule - RFC 5545 RRULE string
+ * @param dtstart - ISO string for the recurrence start date
+ * @param count - Number of occurrences to preview (default 5)
+ * @throws EventApiError on non-2xx response
+ */
+export async function validateRrule(
+  rrule: string,
+  dtstart: string,
+  count = 5,
+): Promise<ValidateRruleResponse> {
+  const url = `${getOracleBridgeUrl()}/api/events/validate-rrule`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ rrule, dtstart, count }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => undefined);
+    throw new EventApiError(
+      body?.error || `Failed to validate RRULE: ${response.status}`,
+      response.status,
+      body,
+    );
+  }
+
+  return response.json();
+}
+
 // --- API functions ---
 
 /**

@@ -17,6 +17,7 @@
 
 import { useState, type FormEvent } from 'react';
 import type { EventItem, CreateEventPayload } from '@/services/event-service';
+import { validateRrule, type ValidateRruleResponse } from '@/services/event-service';
 
 const TIMEZONE_OPTIONS = [
   { value: 'UTC', label: 'UTC (Greenwich Mean Time)' },
@@ -94,6 +95,11 @@ export function EventForm({
       : '',
   );
 
+  // RRULE preview state (AI-R118)
+  const [rrulePreview, setRrulePreview] = useState<ValidateRruleResponse | null>(null);
+  const [rrulePreviewLoading, setRrulePreviewLoading] = useState(false);
+  const [rrulePreviewError, setRrulePreviewError] = useState<string | null>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function clearFieldError(fieldName: string) {
@@ -102,6 +108,30 @@ export function EventForm({
       delete next[fieldName];
       return next;
     });
+  }
+
+  async function handlePreviewRrule() {
+    if (!recurrenceRule.trim()) return;
+    setRrulePreviewLoading(true);
+    setRrulePreviewError(null);
+    setRrulePreview(null);
+    try {
+      const dtstart = startDate && startTime
+        ? `${startDate}T${startTime}:00`
+        : new Date().toISOString();
+      const result = await validateRrule(recurrenceRule.trim(), dtstart, 5);
+      if (!result.valid) {
+        setRrulePreviewError(result.error || 'Invalid RRULE');
+      } else {
+        setRrulePreview(result);
+      }
+    } catch (err) {
+      setRrulePreviewError(
+        err instanceof Error ? err.message : 'Failed to validate RRULE',
+      );
+    } finally {
+      setRrulePreviewLoading(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -381,6 +411,8 @@ export function EventForm({
             if (!e.target.checked) {
               setRecurrenceRule('');
               clearFieldError('recurrenceRule');
+              setRrulePreview(null);
+              setRrulePreviewError(null);
             }
           }}
           className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
@@ -404,6 +436,8 @@ export function EventForm({
             onChange={(e) => {
               setRecurrenceRule(e.target.value);
               clearFieldError('recurrenceRule');
+              setRrulePreview(null);
+              setRrulePreviewError(null);
             }}
             placeholder="FREQ=WEEKLY;BYDAY=TU"
             className={inputClass}
@@ -419,6 +453,31 @@ export function EventForm({
             (weekly Tuesdays), <code>FREQ=MONTHLY;BYDAY=1MO</code> (first
             Monday monthly), <code>FREQ=DAILY;COUNT=5</code> (5 times).
           </p>
+          {/* AI-R118: RRULE Preview */}
+          <button
+            type="button"
+            onClick={handlePreviewRrule}
+            disabled={rrulePreviewLoading || !recurrenceRule.trim()}
+            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            data-testid="rrule-preview-btn"
+          >
+            {rrulePreviewLoading ? 'Validating...' : 'Preview recurrence'}
+          </button>
+          {rrulePreviewError && (
+            <p className="text-sm text-red-600 mt-1" data-testid="rrule-preview-error">
+              {rrulePreviewError}
+            </p>
+          )}
+          {rrulePreview && rrulePreview.valid && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md" data-testid="rrule-preview-dates">
+              <p className="text-xs font-medium text-blue-800 mb-1">Next 5 occurrences:</p>
+              <ul className="text-xs text-blue-700 space-y-0.5">
+                {rrulePreview.next_occurrences.map((dateStr, i) => (
+                  <li key={i}>{new Date(dateStr).toLocaleString()}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
