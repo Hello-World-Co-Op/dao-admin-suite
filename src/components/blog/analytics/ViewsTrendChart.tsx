@@ -70,6 +70,7 @@ export function ViewsTrendChart({ data, loading }: ViewsTrendChartProps) {
     <div data-testid="chart-container">
       <svg
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + LABEL_HEIGHT}`}
+        preserveAspectRatio="none"
         className="w-full h-[200px]"
         role="img"
         aria-label="Views trend chart"

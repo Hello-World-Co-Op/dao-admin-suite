@@ -661,7 +661,7 @@ function AdminDashboard() {
               {analyticsError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm" data-testid="analytics-error">
                   {analyticsError}
-                  <button onClick={() => fetchAnalyticsData(analyticsPeriod)} className="ml-2 underline">Retry</button>
+                  <button type="button" onClick={() => fetchAnalyticsData(analyticsPeriod)} className="ml-2 underline">Retry</button>
                 </div>
               )}
 
