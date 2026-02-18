@@ -34,6 +34,20 @@ import AuthorManagement from '@/components/blog/AuthorManagement';
 import ReadinessChecklist from '@/components/blog/ReadinessChecklist';
 import BlogHealthPanel from '@/components/blog/BlogHealthPanel';
 import CanisterHealthPanel from '@/components/blog/CanisterHealthPanel';
+import { AnalyticsOverview } from '@/components/blog/analytics/AnalyticsOverview';
+import { ViewsTrendChart } from '@/components/blog/analytics/ViewsTrendChart';
+import { TopPostsTable } from '@/components/blog/analytics/TopPostsTable';
+import { AuthorLeaderboard } from '@/components/blog/analytics/AuthorLeaderboard';
+import { CategoryBreakdown } from '@/components/blog/analytics/CategoryBreakdown';
+import {
+  getOverview,
+  getPostAnalytics,
+  getAuthorAnalytics,
+  type AnalyticsPeriod,
+  type OverviewStats,
+  type PostAnalytics as PostAnalyticsType,
+  type AuthorAnalytics as AuthorAnalyticsType,
+} from '@/services/blog-analytics-client';
 
 const PAGE_SIZE = 10;
 
@@ -86,17 +100,17 @@ function formatTimeAgo(isoString: string): string {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-type DashboardView = 'posts' | 'operations';
+type DashboardView = 'posts' | 'operations' | 'analytics';
 
 function AdminDashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const oracleBridgeUrl = useMemo(() => getOracleBridgeUrl(), []);
 
-  // View state: posts (default) or operations (BL-008.7.2)
+  // View state: posts (default), operations (BL-008.7.2), or analytics (BL-020.3)
   const [activeView, setActiveView] = useState<DashboardView>(() => {
     const view = searchParams.get('view');
-    return view === 'operations' ? 'operations' : 'posts';
+    return view === 'analytics' ? 'analytics' : view === 'operations' ? 'operations' : 'posts';
   });
 
   // State
@@ -113,6 +127,14 @@ function AdminDashboard() {
     const status = searchParams.get('status');
     return (status as FilterTab) || 'all';
   });
+
+  // Analytics state (BL-020.3)
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('30d');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [overviewData, setOverviewData] = useState<OverviewStats | null>(null);
+  const [postAnalyticsData, setPostAnalyticsData] = useState<PostAnalyticsType[]>([]);
+  const [authorData, setAuthorData] = useState<AuthorAnalyticsType[]>([]);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
 
   // Schedule modal state
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
@@ -243,6 +265,7 @@ function AdminDashboard() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (activeView === 'operations') params.set('view', 'operations');
+    if (activeView === 'analytics') params.set('view', 'analytics');
     if (activeTab !== 'all') params.set('status', activeTab);
     if (currentPage > 1) params.set('page', String(currentPage));
     setSearchParams(params, { replace: true });
@@ -378,6 +401,34 @@ function AdminDashboard() {
     }
   }, [oracleBridgeUrl, archiveConfirmId, showToast, actionLoading, fetchPosts]);
 
+  // Analytics data fetch (BL-020.3 - Task 7.7)
+  const fetchAnalyticsData = useCallback(async (period: AnalyticsPeriod) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const [overview, posts, authors] = await Promise.all([
+        getOverview(period),
+        getPostAnalytics(period),
+        getAuthorAnalytics(period),
+      ]);
+      setOverviewData(overview);
+      setPostAnalyticsData(posts.posts);
+      setAuthorData(authors.authors);
+    } catch (err) {
+      console.error('[BlogDashboard] Analytics fetch error:', err);
+      setAnalyticsError('Failed to load analytics data. Please try again.');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
+  // Fetch analytics when view or period changes (BL-020.3 - Task 7.8)
+  useEffect(() => {
+    if (activeView === 'analytics') {
+      fetchAnalyticsData(analyticsPeriod);
+    }
+  }, [activeView, analyticsPeriod, fetchAnalyticsData]);
+
   // Tab change handler
   const handleTabChange = useCallback((tab: FilterTab) => {
     setActiveTab(tab);
@@ -450,6 +501,16 @@ function AdminDashboard() {
               data-testid="sidebar-operations"
             >
               Operations
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveView('analytics'); setSidebarOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm font-medium rounded-lg ${
+                activeView === 'analytics' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+              data-testid="sidebar-analytics"
+            >
+              Analytics
             </button>
           </nav>
         </div>
@@ -568,6 +629,69 @@ function AdminDashboard() {
                 <RebuildStatusMonitor />
                 <AuthorManagement />
                 <ReadinessChecklist />
+              </div>
+            </div>
+          )}
+
+          {/* Analytics View (BL-020.3) */}
+          {activeView === 'analytics' && (
+            <div data-testid="analytics-view">
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Blog Analytics</h1>
+                {/* Period selector */}
+                <div className="flex gap-2">
+                  {(['7d', '30d', '90d', 'all'] as AnalyticsPeriod[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setAnalyticsPeriod(p)}
+                      className={`px-3 py-1.5 text-sm rounded-md font-medium ${
+                        analyticsPeriod === p
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                      data-testid={`period-selector-${p}`}
+                    >
+                      {p === 'all' ? 'All time' : p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {analyticsError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm" data-testid="analytics-error">
+                  {analyticsError}
+                  <button onClick={() => fetchAnalyticsData(analyticsPeriod)} className="ml-2 underline">Retry</button>
+                </div>
+              )}
+
+              <div className="space-y-6">
+                <AnalyticsOverview data={overviewData} loading={analyticsLoading} period={analyticsPeriod} />
+
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h2 className="text-base font-semibold text-gray-900 mb-3">Views Over Time</h2>
+                  <ViewsTrendChart data={overviewData?.views_by_day ?? []} loading={analyticsLoading} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h2 className="text-base font-semibold text-gray-900 mb-3">Top Posts</h2>
+                    <TopPostsTable
+                      posts={postAnalyticsData}
+                      loading={analyticsLoading}
+                      publicBlogUrl={import.meta.env.VITE_MARKETING_SUITE_URL || 'https://www.helloworlddao.com'}
+                    />
+                  </div>
+                  <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    <h2 className="text-base font-semibold text-gray-900 mb-3">Author Leaderboard</h2>
+                    <AuthorLeaderboard authors={authorData} loading={analyticsLoading} />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h2 className="text-base font-semibold text-gray-900 mb-3">Category Breakdown</h2>
+                  <CategoryBreakdown postStats={postAnalyticsData} loading={analyticsLoading} />
+                </div>
               </div>
             </div>
           )}
