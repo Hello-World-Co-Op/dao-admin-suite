@@ -41,10 +41,12 @@ export default function EventsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastIsError, setToastIsError] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((message: string) => {
+  const showToast = useCallback((message: string, isError = false) => {
     setToastMessage(message);
+    setToastIsError(isError);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
   }, []);
@@ -139,10 +141,11 @@ export default function EventsPage() {
       showToast('Event deleted.');
     } catch (e) {
       if (e instanceof EventApiError && e.status === 404) {
-        showToast('Event not found.');
+        showToast('Event not found.', true);
       } else {
         showToast(
           e instanceof Error ? e.message : 'Failed to delete event',
+          true,
         );
       }
       setDeleteTarget(null);
@@ -206,9 +209,14 @@ export default function EventsPage() {
 
       {/* Create/Edit Modal */}
       {modalMode && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-form-dialog-title"
+        >
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <h2 id="event-form-dialog-title" className="text-lg font-semibold text-gray-900 mb-4">
               {modalMode === 'create' ? 'Create Event' : 'Edit Event'}
             </h2>
             <EventForm
@@ -249,7 +257,7 @@ export default function EventsPage() {
       {toastMessage && (
         <div
           data-testid="toast"
-          className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow"
+          className={`fixed bottom-4 right-4 text-white px-4 py-2 rounded shadow ${toastIsError ? 'bg-red-600' : 'bg-green-600'}`}
         >
           {toastMessage}
         </div>

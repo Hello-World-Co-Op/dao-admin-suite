@@ -52,11 +52,13 @@ vi.mock('@/services/event-service', () => ({
 import {
   listEvents,
   createEvent,
+  updateEvent,
   deleteEvent,
 } from '@/services/event-service';
 
 const mockListEvents = vi.mocked(listEvents);
 const mockCreateEvent = vi.mocked(createEvent);
+const mockUpdateEvent = vi.mocked(updateEvent);
 const mockDeleteEvent = vi.mocked(deleteEvent);
 
 function createMockEvent(overrides: Partial<EventItem> = {}): EventItem {
@@ -233,6 +235,47 @@ describe('EventsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('form-error')).toHaveTextContent(
         'Title too long',
+      );
+    });
+  });
+
+  it('API error on edit: shows error in form (AC4 - 404 handling)', async () => {
+    mockUpdateEvent.mockRejectedValue(
+      new EventApiError('Event not found', 404),
+    );
+
+    render(<EventsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('DAO Meetup')).toBeInTheDocument();
+    });
+
+    // Open edit modal
+    fireEvent.click(screen.getByTestId('edit-btn-evt-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('event-form')).toBeInTheDocument();
+    });
+
+    // Fill required fields (pre-populated title already set)
+    fireEvent.change(screen.getByTestId('event-start-date-input'), {
+      target: { value: '2026-04-01' },
+    });
+    fireEvent.change(screen.getByTestId('event-start-time-input'), {
+      target: { value: '10:00' },
+    });
+    fireEvent.change(screen.getByTestId('event-end-date-input'), {
+      target: { value: '2026-04-01' },
+    });
+    fireEvent.change(screen.getByTestId('event-end-time-input'), {
+      target: { value: '11:00' },
+    });
+
+    fireEvent.click(screen.getByTestId('event-submit-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('form-error')).toHaveTextContent(
+        'Event not found',
       );
     });
   });

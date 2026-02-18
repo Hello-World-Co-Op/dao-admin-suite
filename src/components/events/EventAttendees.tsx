@@ -55,11 +55,12 @@ export function EventAttendees({ event, onClose }: EventAttendeesProps) {
       data-testid="attendees-modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="attendees-dialog-title"
     >
       <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 id="attendees-dialog-title" className="text-lg font-semibold text-gray-900">
             Attendees for &apos;{event.title}&apos; ({event.attendee_count}{' '}
             going)
           </h2>

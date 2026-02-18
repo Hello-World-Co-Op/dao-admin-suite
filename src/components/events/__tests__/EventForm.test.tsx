@@ -333,6 +333,7 @@ describe('EventForm', () => {
         start_time: '2026-03-15T14:00:00',
         end_time: '2026-03-15T15:00:00',
         timezone: 'UTC',
+        is_recurring: false,
         is_public: true,
       });
     });

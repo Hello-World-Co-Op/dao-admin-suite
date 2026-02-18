@@ -159,9 +159,13 @@ export function EventForm({
     if (description.trim()) payload.description = description.trim();
     if (location.trim()) payload.location = location.trim();
     if (locationUrl.trim()) payload.location_url = locationUrl.trim();
+    // Always include is_recurring in payload so edits can clear recurring status
+    payload.is_recurring = isRecurring;
     if (isRecurring) {
-      payload.is_recurring = true;
       payload.recurrence_rule = recurrenceRule.trim();
+    } else {
+      // Explicitly clear recurrence_rule when recurring is turned off (required for edit mode)
+      payload.recurrence_rule = undefined;
     }
     payload.is_public = isPublic;
     if (maxAttendees.trim()) {
