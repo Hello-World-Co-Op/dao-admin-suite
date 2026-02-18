@@ -30,6 +30,9 @@ const Unauthorized = lazy(() => import('@/pages/Unauthorized'));
 // Role Management page (BL-019.2) - admin-only role assignment and audit
 const RoleManagement = lazy(() => import('@/pages/RoleManagement'));
 
+// Event Management page (BL-025.2) - admin event CRUD and RSVP viewing
+const EventsPage = lazy(() => import('@/pages/EventsPage'));
+
 // Spike: Tiptap editor feasibility validation (BL-008.3.1)
 // This is a temporary experimental route - not for production use
 const EditorSpike = lazy(() => import('@/pages/blog/EditorSpike'));
@@ -135,6 +138,19 @@ export default function App() {
                     redirectBehavior="external"
                   >
                     <RoleManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/events"
+                element={
+                  <ProtectedRoute
+                    requiredRole="admin"
+                    unauthorizedComponent={<Unauthorized />}
+                    loginUrl={founderyOsLoginUrl}
+                    redirectBehavior="external"
+                  >
+                    <EventsPage />
                   </ProtectedRoute>
                 }
               />
