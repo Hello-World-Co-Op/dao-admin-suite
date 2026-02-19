@@ -60,6 +60,7 @@ export default function App() {
   // login with returnUrl=<full admin URL>, bypassing the local /login route. The local /login route
   // (LoginRedirect) still exists for direct URL access. See BL-029.3 Dev Notes for the two-hop alternative.
   const founderyOsLoginUrl = `${import.meta.env.VITE_FOUNDERY_OS_URL || 'http://127.0.0.1:5174'}/login`;
+  const linkIdentityUrl = `${import.meta.env.VITE_MARKETING_URL || 'https://www.helloworlddao.com'}/link-identity`;
 
   return (
     <BrowserRouter>
@@ -85,6 +86,8 @@ export default function App() {
                     unauthorizedComponent={<Unauthorized />}
                     loginUrl={founderyOsLoginUrl}
                     redirectBehavior="external"
+                    requireIILinked
+                    linkIdentityUrl={linkIdentityUrl}
                   >
                     <BlogDashboard />
                   </ProtectedRoute>
@@ -101,6 +104,8 @@ export default function App() {
                     unauthorizedComponent={<Unauthorized />}
                     loginUrl={founderyOsLoginUrl}
                     redirectBehavior="external"
+                    requireIILinked
+                    linkIdentityUrl={linkIdentityUrl}
                   >
                     <BlogEditorPage />
                   </ProtectedRoute>
@@ -114,6 +119,8 @@ export default function App() {
                     unauthorizedComponent={<Unauthorized />}
                     loginUrl={founderyOsLoginUrl}
                     redirectBehavior="external"
+                    requireIILinked
+                    linkIdentityUrl={linkIdentityUrl}
                   >
                     <BlogEditorPage />
                   </ProtectedRoute>
@@ -121,13 +128,13 @@ export default function App() {
               />
 
               {/* All admin routes require authentication + admin role via shared ProtectedRoute */}
-              <Route path="/" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/kyc" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><KYCManagement /></ProtectedRoute>} />
-              <Route path="/members" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><MemberManagement /></ProtectedRoute>} />
-              <Route path="/governance" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><GovernanceOversight /></ProtectedRoute>} />
-              <Route path="/treasury" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><TreasuryManagement /></ProtectedRoute>} />
-              <Route path="/monitoring" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><SystemMonitoring /></ProtectedRoute>} />
-              <Route path="/moderation" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external"><ContentModeration /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/kyc" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><KYCManagement /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><MemberManagement /></ProtectedRoute>} />
+              <Route path="/governance" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><GovernanceOversight /></ProtectedRoute>} />
+              <Route path="/treasury" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><TreasuryManagement /></ProtectedRoute>} />
+              <Route path="/monitoring" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><SystemMonitoring /></ProtectedRoute>} />
+              <Route path="/moderation" element={<ProtectedRoute requiredRole="admin" unauthorizedComponent={<Unauthorized />} loginUrl={founderyOsLoginUrl} redirectBehavior="external" requireIILinked linkIdentityUrl={linkIdentityUrl}><ContentModeration /></ProtectedRoute>} />
               <Route
                 path="/roles"
                 element={
@@ -136,6 +143,8 @@ export default function App() {
                     unauthorizedComponent={<Unauthorized />}
                     loginUrl={founderyOsLoginUrl}
                     redirectBehavior="external"
+                    requireIILinked
+                    linkIdentityUrl={linkIdentityUrl}
                   >
                     <RoleManagement />
                   </ProtectedRoute>
@@ -149,6 +158,8 @@ export default function App() {
                     unauthorizedComponent={<Unauthorized />}
                     loginUrl={founderyOsLoginUrl}
                     redirectBehavior="external"
+                    requireIILinked
+                    linkIdentityUrl={linkIdentityUrl}
                   >
                     <EventsPage />
                   </ProtectedRoute>
